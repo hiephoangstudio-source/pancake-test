@@ -1,12 +1,6 @@
 const MENU = [
     { section: 'TỔNG QUAN' },
     { id: 'dashboard', label: 'Tổng quan', icon: 'layout-dashboard', href: '/' },
-    { section: 'CHI NHÁNH' },
-    { id: 'branch-hoang-cau', label: 'Hoàng Cầu', icon: 'building-2', href: '/?page=branch&branch=HOÀNG CẦU', branchTag: 'HOÀNG CẦU' },
-    { id: 'branch-sai-gon', label: 'Sài Gòn', icon: 'building-2', href: '/?page=branch&branch=Sài Gòn', branchTag: 'Sài Gòn' },
-    { id: 'branch-son-tay', label: 'Sơn Tây', icon: 'building-2', href: '/?page=branch&branch=SƠN TÂY', branchTag: 'SƠN TÂY' },
-    { id: 'branch-ninh-hiep', label: 'Ninh Hiệp', icon: 'building-2', href: '/?page=branch&branch=NINH HIỆP', branchTag: 'NINH HIỆP' },
-    { id: 'branch-long-bien', label: 'Long Biên', icon: 'building-2', href: '/?page=branch&branch=Long biên', branchTag: 'Long biên' },
     { section: 'PHÂN TÍCH' },
     { id: 'staff', label: 'Nhân viên', icon: 'user-check', href: '/?page=staff' },
     { id: 'channels', label: 'Hiệu quả kênh QC', icon: 'megaphone', href: '/?page=channels' },

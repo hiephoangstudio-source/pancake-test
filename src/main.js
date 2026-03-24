@@ -28,16 +28,6 @@ function getPageFromUrl() {
 }
 
 function getSidebarActiveId(route) {
-    if (route.page === 'branch' && route.branch) {
-        const branchMap = {
-            'HOÀNG CẦU': 'branch-hoang-cau',
-            'Sài Gòn': 'branch-sai-gon',
-            'SƠN TÂY': 'branch-son-tay',
-            'NINH HIỆP': 'branch-ninh-hiep',
-            'Long biên': 'branch-long-bien',
-        };
-        return branchMap[route.branch] || 'dashboard';
-    }
     return route.page;
 }
 
