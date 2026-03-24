@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2H Studio — Bảng điều khiển</title>
+    <meta name="description" content="Dashboard phân tích marketing, quản lý chi nhánh và hiệu quả quảng cáo" />
+    <meta property="og:title" content="2H Studio Dashboard" />
+    <meta property="og:description" content="Phân tích marketing & quản lý chi nhánh" />
+    <meta property="og:url" content="https://pancake.2hstudio.vn/" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar"></aside>
+
+        <!-- Main -->
+        <main class="app-main">
+            <header class="app-header" id="app-header">
+                <div class="header-left">
+                    <button class="btn btn-sm" id="sidebar-toggle" title="Ẩn/Hiện menu">
+                        <i data-lucide="panel-left-close"></i>
+                    </button>
+                    <span class="header-title" id="header-title">Tổng quan</span>
+                </div>
+                <div class="header-filters" id="header-filters"></div>
+            </header>
+            <div class="app-content" id="app-content">
+                <!-- Page content rendered here by router -->
+                <div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-muted)">
+                    <i data-lucide="loader-2" style="width:24px;height:24px;animation:spin 1s linear infinite"></i>
+                    <span style="margin-left:8px">Đang tải...</span>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>

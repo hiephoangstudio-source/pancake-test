@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Đăng nhập — 2H Studio</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg-sidebar)">
+    <div style="background:var(--bg-card);border-radius:var(--radius-xl);padding:40px;width:100%;max-width:380px;box-shadow:var(--shadow-lg)">
+        <div style="text-align:center;margin-bottom:24px">
+            <img src="/logo.png" alt="2H Studio" style="height:48px;margin-bottom:12px" onerror="this.style.display='none'" />
+            <h1 style="font-size:20px;font-weight:800;color:var(--text-primary)">2H Studio</h1>
+            <p style="font-size:13px;color:var(--text-muted);margin-top:4px">Đăng nhập để tiếp tục</p>
+        </div>
+        <form id="login-form" style="display:flex;flex-direction:column;gap:12px">
+            <div>
+                <label style="font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:4px;display:block">Master Token</label>
+                <input type="password" id="master-token" placeholder="Nhập master token..."
+                    style="width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;outline:none" autofocus />
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%;padding:10px;font-size:14px;font-weight:600;justify-content:center">
+                Đăng nhập
+            </button>
+            <div id="login-error" style="color:var(--red);font-size:12px;text-align:center;display:none"></div>
+        </form>
+    </div>
+    <script type="module">
+        const API_BASE = import.meta.env?.VITE_API_URL || '/api';
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const token = document.getElementById('master-token').value.trim();
+            const errEl = document.getElementById('login-error');
+            if (!token) { errEl.textContent = 'Vui lòng nhập token'; errEl.style.display = 'block'; return; }
+            try {
+                const res = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ masterToken: token }),
+                });
+                const data = await res.json();
+                if (data.token) {
+                    localStorage.setItem('auth_token', data.token);
+                    window.location.href = '/';
+                } else {
+                    errEl.textContent = data.error || 'Token không hợp lệ';
+                    errEl.style.display = 'block';
+                }
+            } catch (err) {
+                errEl.textContent = 'Lỗi kết nối server';
+                errEl.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

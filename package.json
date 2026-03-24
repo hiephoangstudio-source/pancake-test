@@ -1,0 +1,25 @@
+{
+  "name": "pancake-2hstudio",
+  "version": "2.0.0",
+  "description": "2H Studio Dashboard - Phân tích marketing & quản lý chi nhánh",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "server": "node server/index.js",
+    "server:dev": "node --watch server/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "node-cron": "^3.0.3",
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  }
+}
