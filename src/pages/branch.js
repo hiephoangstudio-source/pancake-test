@@ -177,7 +177,15 @@ async function fetchBranchData(branchTag, tagMap) {
                         <th class="text-right">Tỷ lệ chốt</th>
                     </tr></thead><tbody>${displayStaff.map(s => {
                         const name = (s.userName || '').toLowerCase();
-                        const tc = staffTagCounts[name] || {};
+                        // Try to find matching staff tag counts using partial name matching
+                        let tc = staffTagCounts[name];
+                        if (!tc) {
+                            // Try partial match: if userName 'Thu Hà' contains tag display_name 'Hà'
+                            for (const [key, val] of Object.entries(staffTagCounts)) {
+                                if (name.includes(key) || key.includes(name)) { tc = val; break; }
+                            }
+                        }
+                        tc = tc || {};
                         const staffSigned = tc.signed || s.signed || 0;
                         const staffVisiting = tc.visiting || 0;
                         const staffWrong = tc.wrong || s.wrongTarget || 0;

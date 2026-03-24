@@ -117,7 +117,7 @@ async function loadMessages(customerId) {
                     return `
                         <div class="msg-bubble ${isPage ? 'msg-page' : 'msg-customer'}">
                             <div class="msg-sender">${m.sender_name || (isPage ? 'Trang' : 'Khách')}</div>
-                            <div class="msg-content">${escapeHtml(m.content || '')}</div>
+                            <div class="msg-content">${stripHtml(m.content || '').replace(/\n/g, '<br>')}</div>
                             ${m.attachments && m.attachments !== '[]' ? renderAttachments(m.attachments) : ''}
                             <div class="msg-time">${formatMsgTime(m.created_at)}</div>
                         </div>
