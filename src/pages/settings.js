@@ -103,12 +103,47 @@ async function loadPages() {
         }
         el.innerHTML = `<table class="data-table"><thead><tr><th>Tên</th><th>Page ID</th><th>Token</th><th>Trạng thái</th></tr></thead><tbody>${pages.map(p => `
             <tr>
-                <td style="font-weight:600">${p.name}</td>
+                <td>
+                    <span class="page-name-display" data-page-id="${p.page_id}" style="font-weight:600;cursor:pointer" title="Click để sửa tên">${p.name}
+                        <button class="btn-icon btn-icon-sm page-edit-btn" data-page-id="${p.page_id}" data-page-name="${p.name}" title="Sửa tên">✏️</button>
+                    </span>
+                    <span class="page-name-edit" data-page-id="${p.page_id}" style="display:none">
+                        <input class="inline-edit-input page-name-input" data-page-id="${p.page_id}" value="${p.name}" />
+                    </span>
+                </td>
                 <td style="font-size:11px;color:var(--text-muted)">${p.page_id}</td>
                 <td style="font-size:11px">${p._hasToken ? '✅ Đã cấu hình' : '❌ Chưa có'}</td>
                 <td>${p.is_active ? '<span class="tag tag-lifecycle">Hoạt động</span>' : '<span class="tag" style="color:var(--red)">Tắt</span>'}</td>
             </tr>
         `).join('')}</tbody></table>`;
+
+        // Attach edit handlers
+        document.querySelectorAll('.page-edit-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const pid = btn.dataset.pageId;
+                document.querySelector(`.page-name-display[data-page-id="${pid}"]`).style.display = 'none';
+                const editSpan = document.querySelector(`.page-name-edit[data-page-id="${pid}"]`);
+                editSpan.style.display = 'inline-block';
+                const input = editSpan.querySelector('input');
+                input.focus();
+                input.select();
+            });
+        });
+        document.querySelectorAll('.page-name-input').forEach(input => {
+            const saveName = async () => {
+                const pid = input.dataset.pageId;
+                const newName = input.value.trim();
+                if (!newName) return;
+                try {
+                    await apiPost('/sync/page-name', { pageId: pid, name: newName });
+                    toastSuccess(`Đã đổi tên → ${newName}`);
+                    await loadPages();
+                } catch (err) { toastError(err.message); }
+            };
+            input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') loadPages(); });
+            input.addEventListener('blur', saveName);
+        });
     } catch (err) { console.error(err); }
 }
 
