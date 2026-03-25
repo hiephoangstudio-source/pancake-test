@@ -105,11 +105,14 @@ export async function render(container, { tagMap }) {
         </div>
         <!-- Row 4: Customer Detail Table -->
         <div class="card" style="margin-top:16px">
-            <div class="chart-title"><i data-lucide="contact-2"></i> Chi tiết khách hàng</div>
+            <div class="chart-title" style="display:flex;justify-content:space-between;align-items:center">
+                <span><i data-lucide="contact-2"></i> Chi tiết khách hàng</span>
+                <span id="dash-cust-info" style="font-size:12px;color:var(--text-muted)"></span>
+            </div>
             <div id="dash-customer-table" style="margin-top:8px;overflow-x:auto">
                 <div class="skeleton" style="height:200px"></div>
             </div>
-            <div id="dash-cust-pagination" style="display:flex;gap:8px;justify-content:center;margin-top:12px"></div>
+            <div id="dash-cust-pagination" style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:12px"></div>
         </div>
     `;
     if (window.lucide) window.lucide.createIcons();
@@ -173,21 +176,14 @@ async function fetchAndRender(container, tagMap) {
         // Render 8 Charts Layout
         render8Charts(trendData, topCampData, staffData, tagMap, { from, to, preset });
 
-        // ─── Fetch customers with tag filters ───
+        // ─── Fetch customers with tag filters (paginated) ───
         const tagFilters = [branchFilter, staffFilter, statusFilter, serviceFilter].filter(Boolean);
-        let custUrl = `/dashboard/customers?limit=100`;
-        if (tagFilters.length > 0) custUrl += `&tag=${encodeURIComponent(tagFilters[0])}`;
+        const custPage = window._dashCustPage || 1;
+        let custUrl = `/dashboard/customers?limit=25&page=${custPage}`;
+        if (tagFilters.length > 0) custUrl += `&tag=${encodeURIComponent(tagFilters.join(','))}`;
 
         const customers = await apiGet(custUrl);
-        let custData = customers.data || [];
-
-        // Client-side multi-tag filtering (for 2nd+ filters)
-        if (tagFilters.length > 1) {
-            custData = custData.filter(c => {
-                const tags = (c.tags || []).map(t => typeof t === 'string' ? t.toLowerCase() : (t.name || '').toLowerCase());
-                return tagFilters.slice(1).every(f => tags.includes(f.toLowerCase()));
-            });
-        }
+        const custData = customers.data || [];
 
         // ─── Fetch Staff Tag Stats directly from Backend ───
         const staffTagStats = await apiGet('/dashboard/staff-tag-stats').catch(() => ({}));
@@ -195,8 +191,8 @@ async function fetchAndRender(container, tagMap) {
         // ─── Staff Performance Table (from daily_reports + new API stats) ───
         renderStaffTable(staffData, staffTagStats, tagMap, staffFilter);
 
-        // ─── Customer Detail Table (filtered) ───
-        renderCustomerTable(custData, tagMap);
+        // ─── Customer Detail Table (paginated) ───
+        renderCustomerTable(custData, tagMap, customers.pagination, container);
 
     } catch (err) {
         console.error('Lỗi tải dashboard:', err);
@@ -234,7 +230,22 @@ function renderKpis(data) {
 
 export async function render8Charts(trendData, topCampData, staffData, tagMap, reqData) {
     if (window.lucide) window.lucide.createIcons();
-    
+
+    // Compact tick format helper: 1000000 → 1tr, 1000 → 1K
+    const fmtTick = (v) => v >= 1e6 ? (v/1e6).toFixed(v >= 1e7 ? 0 : 1) + 'tr' : v >= 1e3 ? (v/1e3).toFixed(0) + 'K' : v;
+
+    // Tooltip styling only (don't override global text colors)
+    if (!Chart._2hSetup) {
+        Chart._2hSetup = true;
+        Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(15,23,42,0.95)';
+        Chart.defaults.plugins.tooltip.titleColor = '#F8FAFC';
+        Chart.defaults.plugins.tooltip.bodyColor = '#E2E8F0';
+        Chart.defaults.plugins.tooltip.borderColor = 'rgba(148,163,184,0.2)';
+        Chart.defaults.plugins.tooltip.borderWidth = 1;
+        Chart.defaults.plugins.tooltip.padding = 10;
+        Chart.defaults.plugins.tooltip.cornerRadius = 8;
+    }
+
     // Destroy old charts to prevent memory leaks and overlapping renders
     Object.values(charts).forEach(c => c && c.destroy && c.destroy());
     
@@ -287,7 +298,7 @@ function renderChart1_Conversations(data) {
         options: {
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false }, datalabels: { display: false } },
-            scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 } } } }
+            scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { grid: { color: 'rgba(148,163,184,0.08)' }, ticks: { font: { size: 10 }, callback: fmtTick } } }
         }
     });
 }
@@ -310,7 +321,7 @@ function renderChart2_Revenue(data) {
         options: {
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false }, datalabels: { display: false } },
-            scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 } } } }
+            scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { grid: { color: 'rgba(148,163,184,0.08)' }, ticks: { font: { size: 10 }, callback: fmtTick } } }
         }
     });
 }
@@ -368,8 +379,8 @@ function renderChart3_Marketing(data) {
             plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } }, datalabels: { display: false } },
             scales: {
                 x: { grid: { display: false }, ticks: { font: { size: 10 } } },
-                y: { type: 'linear', display: true, position: 'left', grid: { color: '#F1F5F9' }, title: { display: true, text: 'Hội thoại Ads', font: { size: 10} } },
-                y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Inbox', font: { size: 10} }, min: 0 }
+                y: { type: 'linear', display: true, position: 'left', grid: { color: 'rgba(148,163,184,0.08)' }, title: { display: true, text: 'Chi phí Ads', font: { size: 10} }, ticks: { callback: fmtTick } },
+                y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Inbox', font: { size: 10} }, min: 0, ticks: { callback: fmtTick } }
             }
         }
     });
@@ -408,7 +419,7 @@ function renderChart4_WrongTarget(data) {
             plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } }, datalabels: { display: false } },
             scales: {
                 x: { grid: { display: false }, ticks: { font: { size: 10 } } },
-                y: { type: 'linear', display: true, position: 'left', grid: { color: '#F1F5F9' } },
+                y: { type: 'linear', display: true, position: 'left', grid: { color: 'rgba(148,163,184,0.08)' }, ticks: { callback: fmtTick } },
                 y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, min: 0 }
             }
         }
@@ -419,15 +430,16 @@ function renderChart5_TopCampaigns(topCampData) {
     const ctx = document.getElementById('chart-top-campaigns')?.getContext('2d');
     if (!ctx || !topCampData || !topCampData.length) return;
     
-    const sorted = [...topCampData].sort((a, b) => b.conversations - a.conversations).slice(0, 10);
+    const sorted = [...topCampData].sort((a, b) => (b.spend || b.conversations || 0) - (a.spend || a.conversations || 0)).slice(0, 10);
+    if (sorted.length === 0) return;
     
     charts.c5 = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: sorted.map(d => d.name.length > 20 ? d.name.substring(0,20)+'...' : d.name),
+            labels: sorted.map(d => d.name.length > 25 ? d.name.substring(0,25)+'...' : d.name),
             datasets: [{
-                label: 'Hội thoại',
-                data: sorted.map(d => d.conversations),
+                label: 'Chi phí',
+                data: sorted.map(d => d.spend || 0),
                 backgroundColor: '#F59E0B',
                 borderRadius: 4
             }]
@@ -436,7 +448,7 @@ function renderChart5_TopCampaigns(topCampData) {
             indexAxis: 'y',
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false }, datalabels: { display: false }, tooltip: { callbacks: { title: (ctx) => sorted[ctx[0].dataIndex].name } } },
-            scales: { x: { grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 } } }, y: { grid: { display: false }, ticks: { font: { size: 10 } } } }
+            scales: { x: { grid: { color: 'rgba(148,163,184,0.1)' }, ticks: { font: { size: 10 }, color: '#94A3B8' } }, y: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#E2E8F0' } } }
         }
     });
 }
@@ -617,23 +629,26 @@ function renderStaffTable(staffData, staffTagCounts, tagMap, staffFilter) {
     </tbody></table>`;
 }
 
-// ─── Customer Detail Table ───
-function renderCustomerTable(custData, tagMap) {
+// ─── Customer Detail Table with Pagination ───
+function renderCustomerTable(custData, tagMap, pagination, container) {
     const el = document.getElementById('dash-customer-table');
     if (!el) return;
 
-    if (custData.length === 0) {
+    const infoEl = document.getElementById('dash-cust-info');
+    const pgn = pagination || {};
+    if (infoEl && pgn.total) {
+        infoEl.textContent = fmtNumber(pgn.total) + ' khách';
+    }
+
+    if (!custData || custData.length === 0) {
         el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:16px">Chưa có khách hàng (thay đổi bộ lọc để xem)</div>';
         return;
     }
 
-    el.innerHTML = `<table class="data-table"><thead><tr>
-        <th>Khách hàng</th>
-        <th>SĐT</th>
-        <th>Tags</th>
-        <th class="text-right">Hội thoại</th>
-        <th>Hoạt động cuối</th>
-    </tr></thead><tbody>${custData.slice(0, 50).map(c => {
+    let html = '<table class="data-table"><thead><tr>';
+    html += '<th>Khách hàng</th><th>SĐT</th><th>Tags</th><th class="text-right">Hội thoại</th><th>Hoạt động cuối</th>';
+    html += '</tr></thead><tbody>';
+    for (const c of custData) {
         let phone = '';
         if (c.phone) {
             try {
@@ -645,22 +660,24 @@ function renderCustomerTable(custData, tagMap) {
             const pn = c.phone_numbers[0];
             phone = typeof pn === 'object' ? (pn.captured || pn.phone_number || '') : pn;
         }
-
-        const tagHtml = (c.tags || []).slice(0, 4).map(t => {
+        let tagHtml = '';
+        const tags = (c.tags || []).slice(0, 4);
+        for (const t of tags) {
             const name = typeof t === 'string' ? t : (t.name || '');
             const entry = tagMap[name.toLowerCase()];
-            const cls = entry ? `tag-${entry.category}` : '';
-            return `<span class="tag ${cls}">${entry?.display_name || name}</span>`;
-        }).join(' ');
-
-        return `<tr class="clickable" data-customer-id="${c.pancake_id}" data-customer-name="${c.name || ''}">
-            <td style="font-weight:600">${c.name || '—'}</td>
-            <td style="font-size:12px">${phone || '<span style="color:var(--text-muted)">—</span>'}</td>
-            <td style="display:flex;gap:4px;flex-wrap:wrap">${tagHtml}</td>
-            <td class="text-right">${fmtNumber(c.total_conversations)}</td>
-            <td style="font-size:12px;color:var(--text-secondary)">${fmtDate(c.last_active)}</td>
-        </tr>`;
-    }).join('')}</tbody></table>`;
+            const cls = entry ? 'tag-' + entry.category : '';
+            tagHtml += '<span class="tag ' + cls + '">' + (entry ? entry.display_name : name) + '</span> ';
+        }
+        html += '<tr class="clickable" data-customer-id="' + c.pancake_id + '" data-customer-name="' + (c.name || '') + '">';
+        html += '<td style="font-weight:600">' + (c.name || '—') + '</td>';
+        html += '<td style="font-size:12px">' + (phone || '<span style="color:var(--text-muted)">—</span>') + '</td>';
+        html += '<td style="display:flex;gap:4px;flex-wrap:wrap">' + tagHtml + '</td>';
+        html += '<td class="text-right">' + fmtNumber(c.total_conversations) + '</td>';
+        html += '<td style="font-size:12px;color:var(--text-secondary)">' + fmtDate(c.last_active) + '</td>';
+        html += '</tr>';
+    }
+    html += '</tbody></table>';
+    el.innerHTML = html;
 
     // Click handlers → conversation modal
     el.querySelectorAll('tr.clickable').forEach(row => {
@@ -668,4 +685,26 @@ function renderCustomerTable(custData, tagMap) {
             openConversationModal({ pancake_id: row.dataset.customerId, name: row.dataset.customerName });
         });
     });
+
+    // Pagination
+    const pgnEl = document.getElementById('dash-cust-pagination');
+    if (pgnEl && pgn.totalPages > 1) {
+        const curPage = pgn.page || 1;
+        const totalPages = pgn.totalPages || 1;
+        let pgnHtml = '';
+        pgnHtml += '<button class="btn btn-sm" id="cust-prev" ' + (curPage <= 1 ? 'disabled' : '') + '>← Trước</button>';
+        pgnHtml += '<span style="font-size:12px;color:var(--text-secondary)">Trang ' + curPage + '/' + totalPages + ' (' + fmtNumber(pgn.total) + ' khách)</span>';
+        pgnHtml += '<button class="btn btn-sm" id="cust-next" ' + (curPage >= totalPages ? 'disabled' : '') + '>Sau →</button>';
+        pgnEl.innerHTML = pgnHtml;
+        document.getElementById('cust-prev')?.addEventListener('click', () => {
+            window._dashCustPage = Math.max(1, curPage - 1);
+            fetchAndRender(container, tagMap);
+        });
+        document.getElementById('cust-next')?.addEventListener('click', () => {
+            window._dashCustPage = Math.min(totalPages, curPage + 1);
+            fetchAndRender(container, tagMap);
+        });
+    } else if (pgnEl) {
+        pgnEl.innerHTML = '';
+    }
 }

@@ -14,32 +14,38 @@ export async function render(container, { tagMap }) {
     }
 
     container.innerHTML = '<div id="tags-kpis" class="kpi-grid" style="margin-bottom:12px"></div>'
-        + '<div class="card" style="margin-bottom:12px"><div class="chart-title"><i data-lucide="camera"></i> Dịch vụ (theo tag) × Chi nhánh</div><div id="service-cross-table" style="margin-top:8px;overflow-x:auto">Đang tải...</div></div>'
-        + '<div class="card" style="margin-bottom:12px"><div class="chart-title"><i data-lucide="activity"></i> Trạng thái KH (lifecycle) × Chi nhánh</div><div id="lifecycle-cross-table" style="margin-top:8px;overflow-x:auto">Đang tải...</div></div>'
-        + '<div class="card"><div class="chart-title"><i data-lucide="map-pin"></i> Địa điểm chụp × Chi nhánh</div><div id="location-cross-table" style="margin-top:8px;overflow-x:auto">Đang tải...</div></div>';
+        + '<div class="card" style="margin-bottom:12px"><div class="chart-title"><i data-lucide="camera"></i> Dịch vụ (theo tag)</div><div id="service-cross-table" style="margin-top:8px;overflow-x:auto">Đang tải...</div></div>'
+        + '<div class="card" style="margin-bottom:12px"><div class="chart-title"><i data-lucide="activity"></i> Trạng thái KH (lifecycle)</div><div id="lifecycle-cross-table" style="margin-top:8px;overflow-x:auto">Đang tải...</div></div>'
+        + '<div class="card"><div class="chart-title"><i data-lucide="map-pin"></i> Địa điểm chụp</div><div id="location-cross-table" style="margin-top:8px;overflow-x:auto">Đang tải...</div></div>';
     if (window.lucide) window.lucide.createIcons();
 
-    const load = () => fetchTagsReport(tagMap);
+    var load = function() { return fetchTagsReport(tagMap); };
     document.getElementById('tags-time')?.addEventListener('change', load);
     await load();
 }
 
 async function fetchTagsReport(tagMap) {
-    const preset = document.getElementById('tags-time')?.value || 'this_month';
-    const { from, to } = getDateRange(preset);
+    var preset = document.getElementById('tags-time')?.value || 'this_month';
+    var dr = getDateRange(preset);
 
     try {
-        const [branches, crossData, customerKpis] = await Promise.all([
-            apiGet('/dashboard/branch-summary?from=' + from + '&to=' + to),
+        var results = await Promise.all([
+            apiGet('/dashboard/branch-summary?from=' + dr.from + '&to=' + dr.to),
             apiGet('/dashboard/tag-cross-branch'),
             apiGet('/dashboard/customer-kpis'),
         ]);
+        var branches = results[0];
+        var crossData = results[1];
+        var customerKpis = results[2];
 
-        const kpiEl = document.getElementById('tags-kpis');
+        var kpiEl = document.getElementById('tags-kpis');
         if (kpiEl) {
-            const totalCustomers = branches.reduce((s, b) => s + b.total_customers, 0);
-            const totalSigned = branches.reduce((s, b) => s + b.signed, 0);
-            const totalPhone = branches.reduce((s, b) => s + b.has_phone, 0);
+            var totalCustomers = 0, totalSigned = 0, totalPhone = 0;
+            for (var i = 0; i < branches.length; i++) {
+                totalCustomers += branches[i].total_customers;
+                totalSigned += branches[i].signed;
+                totalPhone += branches[i].has_phone;
+            }
             kpiEl.innerHTML = renderKpiGrid([
                 renderKpiCard({ label: 'Tổng KH (có tag CN)', value: fmtNumber(totalCustomers), icon: 'users', color: 'var(--blue)' }),
                 renderKpiCard({ label: 'Có SĐT', value: fmtNumber(totalPhone), icon: 'phone', color: 'var(--green)' }),
@@ -49,47 +55,64 @@ async function fetchTagsReport(tagMap) {
             if (window.lucide) window.lucide.createIcons();
         }
 
-        const branchNames = crossData.branches || [];
-        renderCrossBranchTable('service-cross-table', crossData.service || [], branchNames, 'Dịch vụ');
-        renderCrossBranchTable('lifecycle-cross-table', crossData.lifecycle || [], branchNames, 'Trạng thái');
-        renderCrossBranchTable('location-cross-table', crossData.location || [], branchNames, 'Địa điểm');
+        var branchNames = crossData.branches || [];
+        renderTransposedTable('service-cross-table', crossData.service || [], branchNames);
+        renderTransposedTable('lifecycle-cross-table', crossData.lifecycle || [], branchNames);
+        renderTransposedTable('location-cross-table', crossData.location || [], branchNames);
     } catch (err) {
         console.error('Lỗi tải báo cáo tags:', err);
     }
 }
 
-function renderCrossBranchTable(containerId, data, branchNames, firstColLabel) {
-    const el = document.getElementById(containerId);
+/**
+ * Render transposed table:
+ *   Rows = branches (5 CN + 1 Tổng)
+ *   Columns = tag values (e.g. Chụp gia đình, Chụp studio, ...)
+ */
+function renderTransposedTable(containerId, data, branchNames) {
+    var el = document.getElementById(containerId);
     if (!el) return;
     if (!data || data.length === 0) {
         el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:16px">Chưa có dữ liệu</div>';
         return;
     }
-    const branchTotals = {};
-    for (const br of branchNames) branchTotals[br] = 0;
-    let grandTotal = 0;
 
-    for (const row of data) {
-        grandTotal += row.total;
-        for (const br of branchNames) {
-            branchTotals[br] += (row.branches[br] || 0);
-        }
+    // Column headers = tag display names
+    var tagNames = [];
+    for (var i = 0; i < data.length; i++) tagNames.push(data[i].display_name);
+
+    // Compute totals per column
+    var colTotals = [];
+    for (var j = 0; j < data.length; j++) {
+        var colSum = 0;
+        for (var k = 0; k < branchNames.length; k++) colSum += (data[j].branches[branchNames[k]] || 0);
+        colTotals.push(colSum);
     }
 
-    let html = '<table class="data-table"><thead><tr>';
-    html += '<th>' + firstColLabel + '</th>';
-    for (const b of branchNames) html += '<th class="text-right">' + b + '</th>';
+    var html = '<table class="data-table"><thead><tr>';
+    html += '<th style="min-width:120px">Chi nhánh</th>';
+    for (var i = 0; i < tagNames.length; i++) html += '<th class="text-right" style="font-size:11px">' + tagNames[i] + '</th>';
     html += '<th class="text-right" style="font-weight:700">Tổng</th>';
     html += '</tr></thead><tbody>';
 
-    for (const row of data) {
-        html += '<tr><td style="font-weight:600">' + row.display_name + '</td>';
-        for (const b of branchNames) html += '<td class="text-right">' + fmtNumber(row.branches[b] || 0) + '</td>';
-        html += '<td class="text-right" style="font-weight:700;color:var(--blue)">' + fmtNumber(row.total) + '</td></tr>';
+    // One row per branch
+    for (var b = 0; b < branchNames.length; b++) {
+        var brName = branchNames[b];
+        var rowTotal = 0;
+        html += '<tr><td style="font-weight:600">' + brName + '</td>';
+        for (var j = 0; j < data.length; j++) {
+            var val = data[j].branches[brName] || 0;
+            rowTotal += val;
+            html += '<td class="text-right">' + fmtNumber(val) + '</td>';
+        }
+        html += '<td class="text-right" style="font-weight:700;color:var(--blue)">' + fmtNumber(rowTotal) + '</td></tr>';
     }
 
+    // Totals row
+    var grandTotal = 0;
+    for (var j = 0; j < colTotals.length; j++) grandTotal += colTotals[j];
     html += '<tr style="font-weight:700;border-top:2px solid var(--border)"><td>Tổng</td>';
-    for (const b of branchNames) html += '<td class="text-right">' + fmtNumber(branchTotals[b]) + '</td>';
+    for (var j = 0; j < colTotals.length; j++) html += '<td class="text-right">' + fmtNumber(colTotals[j]) + '</td>';
     html += '<td class="text-right" style="color:var(--blue)">' + fmtNumber(grandTotal) + '</td></tr>';
     html += '</tbody></table>';
     el.innerHTML = html;

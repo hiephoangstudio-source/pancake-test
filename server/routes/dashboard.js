@@ -813,36 +813,47 @@ router.get('/tag-cross-branch', async (req, res) => {
         const cached = getCached('tag_cross_branch');
         if (cached) return res.json(cached);
 
-        // Get branches
-        const { rows: branches } = await query(
-            `SELECT tag_name, display_name FROM tag_classifications WHERE category = 'branch' AND is_active = TRUE ORDER BY sort_order`
+        // Get all classifications in one query
+        const { rows: allTags } = await query(
+            `SELECT tag_name, display_name, category FROM tag_classifications WHERE is_active = TRUE ORDER BY category, sort_order`
         );
 
-        // For each category (service, lifecycle, location), count per branch
+        const branches = allTags.filter(t => t.category === 'branch');
+        const branchNames = branches.map(b => b.display_name);
+
+        // Single optimized query: for each customer, extract tag matches
+        const { rows: customers } = await query(
+            `SELECT tags::text AS tags_text FROM customers WHERE tags IS NOT NULL AND jsonb_array_length(tags) > 0`
+        );
+
+        // Build lookup: for each category, count tag×branch occurrences
         const result = {};
         for (const cat of ['service', 'lifecycle', 'location']) {
-            const { rows: catTags } = await query(
-                `SELECT tag_name, display_name FROM tag_classifications WHERE category = $1 AND is_active = TRUE ORDER BY sort_order`,
-                [cat]
-            );
+            const catTags = allTags.filter(t => t.category === cat);
+            const catData = catTags.map(tag => ({
+                tag_name: tag.tag_name,
+                display_name: tag.display_name,
+                branches: Object.fromEntries(branchNames.map(b => [b, 0])),
+                total: 0
+            }));
 
-            const catData = [];
-            for (const tag of catTags) {
-                const row = { tag_name: tag.tag_name, display_name: tag.display_name, branches: {}, total: 0 };
-                for (const br of branches) {
-                    const { rows: [{ count }] } = await query(
-                        `SELECT COUNT(DISTINCT c.pancake_id) AS count FROM customers c
-                         WHERE c.tags::text ILIKE $1 AND c.tags::text ILIKE $2`,
-                        [`%${tag.tag_name}%`, `%${br.tag_name}%`]
-                    );
-                    row.branches[br.display_name] = parseInt(count);
-                    row.total += parseInt(count);
+            // Count in-memory (much faster than N×M SQL queries)
+            for (const cust of customers) {
+                const txt = cust.tags_text.toLowerCase();
+                for (let i = 0; i < catData.length; i++) {
+                    if (txt.includes(catTags[i].tag_name.toLowerCase())) {
+                        for (let j = 0; j < branches.length; j++) {
+                            if (txt.includes(branches[j].tag_name.toLowerCase())) {
+                                catData[i].branches[branchNames[j]]++;
+                                catData[i].total++;
+                            }
+                        }
+                    }
                 }
-                catData.push(row);
             }
             result[cat] = catData;
         }
-        result.branches = branches.map(b => b.display_name);
+        result.branches = branchNames;
 
         setCache('tag_cross_branch', result, 120_000);
         res.json(result);

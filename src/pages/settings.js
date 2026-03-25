@@ -1,231 +1,123 @@
-import { apiGet, apiPost, apiDelete } from '../utils/api.js';
+import { apiGet, apiPost } from '../utils/api.js';
 import { toastSuccess, toastError } from '../components/toast.js';
 
 export function destroy() {}
 
 export async function render(container) {
-    const headerTitle = document.getElementById('header-title');
+    var headerTitle = document.getElementById('header-title');
     if (headerTitle) headerTitle.textContent = 'Cấu hình';
 
-    const filtersEl = document.getElementById('header-filters');
+    var filtersEl = document.getElementById('header-filters');
     if (filtersEl) {
-        filtersEl.innerHTML = `
-            <button class="btn btn-primary" id="save-config-btn" style="display:flex;align-items:center;gap:6px">
-                <i data-lucide="save" style="width:14px;height:14px"></i> Lưu cấu hình
-            </button>
-        `;
+        filtersEl.innerHTML = '<button class="btn btn-primary" id="save-config-btn" style="display:flex;align-items:center;gap:6px"><i data-lucide="save" style="width:14px;height:14px"></i> Lưu cấu hình</button>';
     }
 
-    container.innerHTML = `
-        <!-- Master Token + Sync -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" class="settings-grid">
-            <div class="card">
-                <div class="chart-title"><i data-lucide="key"></i> Pancake Master Token</div>
-                <p style="font-size:12px;color:var(--text-muted);margin:8px 0">Token xác thực API Pancake để đồng bộ dữ liệu.</p>
-                <div id="token-status" style="font-size:12px;margin-bottom:8px"></div>
-                <input id="master-token-input" placeholder="Nhập master token mới..." type="password"
-                    style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;margin-bottom:8px;font-family:monospace" />
-                <button class="btn btn-primary" id="save-token-btn" style="width:100%"><i data-lucide="save"></i> Lưu Token</button>
-            </div>
-            <div class="card">
-                <div class="chart-title"><i data-lucide="refresh-cw"></i> Đồng bộ dữ liệu</div>
-                <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
-                    <button class="btn" id="sync-today-btn"><i data-lucide="zap"></i> Hôm nay</button>
-                    <button class="btn" id="sync-week-btn"><i data-lucide="calendar"></i> 7 ngày</button>
-                    <button class="btn" id="sync-month-btn"><i data-lucide="calendar-range"></i> 30 ngày</button>
-                </div>
-                <div id="sync-status" style="margin-top:8px;font-size:12px;color:var(--text-muted)"></div>
-                <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-                    <div class="chart-title" style="margin-bottom:4px"><i data-lucide="user"></i> Thông tin đăng nhập</div>
-                    <div id="user-info" style="font-size:12px;color:var(--text-secondary)"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Users Table -->
-        <div class="card" style="margin-top:16px">
-            <div class="chart-title"><i data-lucide="users-2"></i> Quản lý nhân viên (Pancake Users)</div>
-            <p style="font-size:12px;color:var(--text-muted);margin:4px 0 8px">Danh sách nhân viên đã đồng bộ từ Pancake. Dữ liệu cập nhật mỗi lần đồng bộ.</p>
-            <div id="users-table" style="overflow-x:auto">Đang tải...</div>
-        </div>
-
-        <!-- Pages + Tags -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px" class="settings-grid">
-            <div class="card">
-                <div class="chart-title"><i data-lucide="file-text"></i> Quản lý Pages (Trang Facebook)</div>
-                <div id="pages-list" style="margin-top:8px">Đang tải...</div>
-                <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-                    <h4 style="font-size:12px;font-weight:600;margin-bottom:8px">Thêm trang mới</h4>
-                    <input id="new-page-id" placeholder="Page ID" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;margin-bottom:6px" />
-                    <input id="new-page-name" placeholder="Tên trang" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;margin-bottom:6px" />
-                    <input id="new-page-token" placeholder="Access Token" type="password" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;margin-bottom:6px" />
-                    <button class="btn btn-primary" id="add-page-btn" style="width:100%">Thêm trang</button>
-                </div>
-            </div>
-            <div class="card">
-                <div class="chart-title"><i data-lucide="tag"></i> Phân loại Tags</div>
-                <div id="tags-config" style="margin-top:8px">Đang tải...</div>
-            </div>
-        </div>
-    `;
+    container.innerHTML = ''
+        // Row 1: Users + Pages side by side
+        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" class="settings-grid">'
+        + '<div class="card">'
+        + '<div class="chart-title"><i data-lucide="users-2"></i> Quản lý nhân viên</div>'
+        + '<div id="users-table" style="margin-top:8px;overflow-x:auto;max-height:360px;overflow-y:auto">Đang tải...</div>'
+        + '</div>'
+        + '<div class="card">'
+        + '<div class="chart-title"><i data-lucide="file-text"></i> Quản lý Pages</div>'
+        + '<div id="pages-list" style="margin-top:8px;overflow-x:auto;max-height:360px;overflow-y:auto">Đang tải...</div>'
+        + '</div>'
+        + '</div>'
+        // Row 2: Token + Sync + Add Page
+        + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px" class="settings-grid">'
+        + '<div class="card">'
+        + '<div class="chart-title"><i data-lucide="key"></i> Master Token</div>'
+        + '<div id="token-status" style="font-size:12px;margin:8px 0"></div>'
+        + '<input id="master-token-input" placeholder="Nhập master token..." type="password" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;margin-bottom:8px;font-family:monospace" />'
+        + '<button class="btn btn-primary" id="save-token-btn" style="width:100%"><i data-lucide="save"></i> Lưu Token</button>'
+        + '</div>'
+        + '<div class="card">'
+        + '<div class="chart-title"><i data-lucide="refresh-cw"></i> Đồng bộ dữ liệu</div>'
+        + '<div style="display:flex;gap:8px;align-items:center;margin:8px 0">'
+        + '<select class="filter-select" id="sync-preset" style="flex:1"><option value="1">Hôm nay</option><option value="7" selected>7 ngày</option><option value="14">14 ngày</option><option value="30">30 ngày</option><option value="60">60 ngày</option><option value="90">90 ngày</option><option value="custom">Tự chọn...</option></select>'
+        + '<button class="btn btn-primary" id="sync-run-btn"><i data-lucide="play"></i> Chạy</button>'
+        + '</div>'
+        + '<div id="sync-custom-dates" style="display:none;gap:8px;margin-bottom:8px"><input type="date" id="sync-from" class="filter-select" /><span style="color:var(--text-muted)">→</span><input type="date" id="sync-to" class="filter-select" /></div>'
+        + '<div id="sync-status" style="font-size:12px;color:var(--text-muted)"></div>'
+        + '</div>'
+        + '<div class="card">'
+        + '<div class="chart-title"><i data-lucide="plus-circle"></i> Thêm trang mới</div>'
+        + '<input id="new-page-id" placeholder="Page ID" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;margin-top:8px;margin-bottom:6px" />'
+        + '<input id="new-page-name" placeholder="Tên trang" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;margin-bottom:6px" />'
+        + '<input id="new-page-token" placeholder="Access Token" type="password" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;margin-bottom:6px" />'
+        + '<button class="btn btn-primary" id="add-page-btn" style="width:100%">Thêm trang</button>'
+        + '</div>'
+        + '</div>';
     if (window.lucide) window.lucide.createIcons();
 
-    // Show current user info
+    // Check token
     try {
-        const { getUser } = await import('../utils/auth.js');
-        const user = getUser();
-        const userInfoEl = document.getElementById('user-info');
-        if (userInfoEl && user) {
-            userInfoEl.innerHTML = `<strong>${user.name || 'Admin'}</strong> · ${user.role || 'admin'}`;
-        }
+        var res = await apiGet('/sync/status');
+        var statusEl = document.getElementById('token-status');
+        if (statusEl) statusEl.innerHTML = res?.hasToken ? '<span style="color:var(--green)">✅ Đã cấu hình</span>' : '<span style="color:var(--red)">❌ Chưa có token</span>';
     } catch {}
 
-    // Check token status
-    try {
-        const statusEl = document.getElementById('token-status');
-        const res = await apiGet('/sync/status');
-        if (statusEl) {
-            statusEl.innerHTML = res?.hasToken
-                ? '<span style="color:var(--green)">✅ Token đã được cấu hình</span>'
-                : '<span style="color:var(--red)">❌ Chưa có token — cần nhập để đồng bộ</span>';
-        }
-    } catch {
-        const statusEl = document.getElementById('token-status');
-        if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted)">Không thể kiểm tra trạng thái</span>';
-    }
+    // Custom date toggle
+    document.getElementById('sync-preset')?.addEventListener('change', function() {
+        var el = document.getElementById('sync-custom-dates');
+        if (el) el.style.display = this.value === 'custom' ? 'flex' : 'none';
+    });
 
-    await Promise.all([loadPages(), loadTagConfig(), loadUsers()]);
+    await Promise.all([loadPages(), loadUsers()]);
 
     document.getElementById('add-page-btn')?.addEventListener('click', addPage);
     document.getElementById('save-token-btn')?.addEventListener('click', saveToken);
-    document.getElementById('sync-today-btn')?.addEventListener('click', () => triggerSync(1));
-    document.getElementById('sync-week-btn')?.addEventListener('click', () => triggerSync(7));
-    document.getElementById('sync-month-btn')?.addEventListener('click', () => triggerSync(30));
-    document.getElementById('save-config-btn')?.addEventListener('click', saveConfig);
+    document.getElementById('sync-run-btn')?.addEventListener('click', runSync);
+    document.getElementById('save-config-btn')?.addEventListener('click', function() { toastSuccess('✅ Cấu hình đã được lưu!'); });
 }
-
 
 async function loadUsers() {
     try {
-        const users = await apiGet('/users');
-        const el = document.getElementById('users-table');
+        var users = await apiGet('/users');
+        var el = document.getElementById('users-table');
         if (!el) return;
-        if (!users || users.length === 0) {
-            el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px">Chưa có nhân viên. Hãy đồng bộ dữ liệu trước.</div>';
-            return;
+        if (!users || users.length === 0) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px">Chưa có dữ liệu</div>'; return; }
+        var html = '<table class="data-table"><thead><tr><th></th><th>Tên</th><th>ID</th><th>Quyền</th></tr></thead><tbody>';
+        for (var i = 0; i < users.length; i++) {
+            var u = users[i];
+            var init = (u.name || 'U')[0].toUpperCase();
+            var av = u.avatar ? '<img src="' + u.avatar + '" style="width:26px;height:26px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'" />'
+                : '<div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#3B82F6,#8B5CF6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">' + init + '</div>';
+            var badge = u.role === 'admin' ? '<span class="tag tag-lifecycle" style="font-size:10px">Admin</span>' : '<span class="tag" style="font-size:10px">User</span>';
+            html += '<tr><td style="width:36px">' + av + '</td><td style="font-weight:600">' + (u.name || '\u2014') + '</td><td style="font-size:11px;color:var(--text-muted);font-family:monospace">' + u.pancake_id.substring(0,8) + '...</td><td>' + badge + '</td></tr>';
         }
-        el.innerHTML = `<table class="data-table"><thead><tr>
-            <th></th>
-            <th>Tên</th>
-            <th>ID Pancake</th>
-            <th>Quyền</th>
-        </tr></thead><tbody>${users.map(u => {
-            const initial = (u.name || 'U')[0].toUpperCase();
-            const avatarHtml = u.avatar
-                ? `<img src="${u.avatar}" style="width:28px;height:28px;border-radius:50%;object-fit:cover" onerror="this.style.display='none'" />`
-                : `<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#3B82F6,#8B5CF6);display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:700">${initial}</div>`;
-            const roleBadge = u.role === 'admin'
-                ? '<span class="tag tag-lifecycle" style="font-size:10px">Admin</span>'
-                : '<span class="tag" style="font-size:10px">User</span>';
-            return `<tr>
-                <td style="width:40px">${avatarHtml}</td>
-                <td style="font-weight:600">${u.name || '—'}</td>
-                <td style="font-size:11px;color:var(--text-muted);font-family:monospace">${u.pancake_id}</td>
-                <td>${roleBadge}</td>
-            </tr>`;
-        }).join('')}</tbody></table>`;
-    } catch (err) {
-        console.error('Load users error:', err);
-    }
+        html += '</tbody></table>';
+        el.innerHTML = html;
+    } catch (err) { console.error('Load users error:', err); }
 }
 
 async function loadPages() {
     try {
-        const pages = await apiGet('/pages');
-        const el = document.getElementById('pages-list');
+        var pages = await apiGet('/pages');
+        var el = document.getElementById('pages-list');
         if (!el) return;
-        if (pages.length === 0) {
-            el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Chưa có trang nào</div>';
-            return;
+        if (pages.length === 0) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Chưa có trang nào</div>'; return; }
+        var html = '<table class="data-table"><thead><tr><th>Tên</th><th>ID</th><th>Token</th></tr></thead><tbody>';
+        for (var i = 0; i < pages.length; i++) {
+            var p = pages[i];
+            var isLong = p.page_id.length > 16;
+            html += '<tr><td style="font-weight:600">' + p.name + '</td>';
+            html += '<td style="font-size:11px;color:var(--text-muted)">' + (isLong ? p.page_id.substring(0,16)+'...' : p.page_id) + '</td>';
+            html += '<td style="font-size:11px">' + (p._hasToken ? '✅' : '❌') + '</td></tr>';
         }
-        el.innerHTML = `<table class="data-table"><thead><tr><th>Tên</th><th>Page ID</th><th>Token</th><th>Trạng thái</th></tr></thead><tbody>${pages.map(p => `
-            <tr>
-                <td>
-                    <span class="page-name-display" data-page-id="${p.page_id}" style="font-weight:600;cursor:pointer" title="Click để sửa tên">${p.name}
-                        <button class="btn-icon btn-icon-sm page-edit-btn" data-page-id="${p.page_id}" data-page-name="${p.name}" title="Sửa tên">✏️</button>
-                    </span>
-                    <span class="page-name-edit" data-page-id="${p.page_id}" style="display:none">
-                        <input class="inline-edit-input page-name-input" data-page-id="${p.page_id}" value="${p.name}" />
-                    </span>
-                </td>
-                <td style="font-size:11px;color:var(--text-muted)">${p.page_id}</td>
-                <td style="font-size:11px">${p._hasToken ? '✅ Đã cấu hình' : '❌ Chưa có'}</td>
-                <td>${p.is_active ? '<span class="tag tag-lifecycle">Hoạt động</span>' : '<span class="tag" style="color:var(--red)">Tắt</span>'}</td>
-            </tr>
-        `).join('')}</tbody></table>`;
-
-        // Attach edit handlers
-        document.querySelectorAll('.page-edit-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const pid = btn.dataset.pageId;
-                document.querySelector(`.page-name-display[data-page-id="${pid}"]`).style.display = 'none';
-                const editSpan = document.querySelector(`.page-name-edit[data-page-id="${pid}"]`);
-                editSpan.style.display = 'inline-block';
-                const input = editSpan.querySelector('input');
-                input.focus();
-                input.select();
-            });
-        });
-        document.querySelectorAll('.page-name-input').forEach(input => {
-            const saveName = async () => {
-                const pid = input.dataset.pageId;
-                const newName = input.value.trim();
-                if (!newName) return;
-                try {
-                    await apiPost('/sync/page-name', { pageId: pid, name: newName });
-                    toastSuccess(`Đã đổi tên → ${newName}`);
-                    await loadPages();
-                } catch (err) { toastError(err.message); }
-            };
-            input.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') loadPages(); });
-            input.addEventListener('blur', saveName);
-        });
-    } catch (err) { console.error(err); }
-}
-
-async function loadTagConfig() {
-    try {
-        const tags = await apiGet('/tag-config');
-        const el = document.getElementById('tags-config');
-        if (!el) return;
-
-        const groups = {};
-        for (const t of tags) {
-            if (!groups[t.category]) groups[t.category] = [];
-            groups[t.category].push(t);
-        }
-
-        const categoryNames = { branch: '🏢 Chi nhánh', staff: '👤 Nhân viên', lifecycle: '📊 Trạng thái KH', service: '📸 Dịch vụ', location: '📍 Địa điểm chụp' };
-
-        el.innerHTML = Object.entries(groups).map(([cat, tags]) => `
-            <div style="margin-bottom:12px">
-                <div style="font-size:12px;font-weight:600;margin-bottom:4px">${categoryNames[cat] || cat} (${tags.length})</div>
-                <div style="display:flex;flex-wrap:wrap;gap:4px">
-                    ${tags.map(t => `<span class="tag tag-${t.category}" style="${t.color ? `border-left:3px solid ${t.color}` : ''}">${t.display_name || t.tag_name}</span>`).join('')}
-                </div>
-            </div>
-        `).join('');
+        html += '</tbody></table>';
+        el.innerHTML = html;
     } catch (err) { console.error(err); }
 }
 
 async function addPage() {
-    const page_id = document.getElementById('new-page-id')?.value;
-    const name = document.getElementById('new-page-name')?.value;
-    const access_token = document.getElementById('new-page-token')?.value;
-    if (!page_id || !name) { toastError('Vui lòng nhập Page ID và tên'); return; }
+    var pid = document.getElementById('new-page-id')?.value;
+    var name = document.getElementById('new-page-name')?.value;
+    var token = document.getElementById('new-page-token')?.value;
+    if (!pid || !name) { toastError('Nhập Page ID và tên'); return; }
     try {
-        await apiPost('/pages', { page_id, name, access_token });
+        await apiPost('/pages', { page_id: pid, name: name, access_token: token });
         toastSuccess('Đã thêm trang!');
         document.getElementById('new-page-id').value = '';
         document.getElementById('new-page-name').value = '';
@@ -235,34 +127,34 @@ async function addPage() {
 }
 
 async function saveToken() {
-    const token = document.getElementById('master-token-input')?.value?.trim();
-    if (!token) { toastError('Vui lòng nhập master token'); return; }
+    var token = document.getElementById('master-token-input')?.value?.trim();
+    if (!token) { toastError('Nhập master token'); return; }
     try {
-        await apiPost('/sync/master-token', { token });
-        toastSuccess('Đã cập nhật Master Token!');
+        await apiPost('/sync/master-token', { token: token });
+        toastSuccess('Đã cập nhật Token!');
         document.getElementById('master-token-input').value = '';
-        const statusEl = document.getElementById('token-status');
-        if (statusEl) statusEl.innerHTML = '<span style="color:var(--green)">✅ Token đã được cấu hình</span>';
+        var s = document.getElementById('token-status');
+        if (s) s.innerHTML = '<span style="color:var(--green)">✅ Đã cấu hình</span>';
     } catch (err) { toastError(err.message); }
 }
 
-async function triggerSync(days) {
-    const statusEl = document.getElementById('sync-status');
-    if (statusEl) statusEl.textContent = `⏳ Đang đồng bộ ${days} ngày...`;
-    try {
-        await apiPost('/sync/trigger', { days });
-        if (statusEl) statusEl.textContent = `✅ Đã kích hoạt đồng bộ ${days} ngày`;
-        toastSuccess(`Đã kích hoạt đồng bộ ${days} ngày`);
-    } catch (err) {
-        if (statusEl) statusEl.textContent = `❌ Lỗi: ${err.message}`;
-        toastError(err.message);
+async function runSync() {
+    var preset = document.getElementById('sync-preset')?.value;
+    var statusEl = document.getElementById('sync-status');
+    var days = parseInt(preset) || 7;
+    if (preset === 'custom') {
+        var f = document.getElementById('sync-from')?.value;
+        var t = document.getElementById('sync-to')?.value;
+        if (!f || !t) { toastError('Chọn ngày bắt đầu và kết thúc'); return; }
+        days = Math.ceil((new Date(t) - new Date(f)) / 86400000);
     }
-}
-
-async function saveConfig() {
+    if (statusEl) statusEl.textContent = '\u23F3 Đang đồng bộ ' + days + ' ngày...';
     try {
-        toastSuccess('✅ Cấu hình đã được lưu thành công!');
+        await apiPost('/sync/trigger', { days: days });
+        if (statusEl) statusEl.textContent = '\u2705 Đồng bộ ' + days + ' ngày OK';
+        toastSuccess('Đồng bộ ' + days + ' ngày thành công');
     } catch (err) {
-        toastError('Lỗi lưu cấu hình: ' + err.message);
+        if (statusEl) statusEl.textContent = '\u274C ' + err.message;
+        toastError(err.message);
     }
 }
