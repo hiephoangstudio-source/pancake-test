@@ -484,12 +484,16 @@ router.get('/customers', async (req, res) => {
 
         // Paginated data
         const sql = `
-      SELECT pancake_id, name, phone, phone_numbers, gender, tags,
-             last_active, page_id, total_conversations
-      FROM customers
-      ${where}
-      ORDER BY last_active DESC NULLS LAST
-      LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
+      SELECT c.*, COALESCE(p.name, c.page_id) AS page_name
+      FROM (
+        SELECT pancake_id, name, phone, phone_numbers, gender, tags,
+               last_active, page_id, total_conversations
+        FROM customers
+        ${where}
+        ORDER BY last_active DESC NULLS LAST
+        LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
+      ) c
+      LEFT JOIN pages p ON p.page_id = c.page_id
     `;
         params.push(lim, offset);
 

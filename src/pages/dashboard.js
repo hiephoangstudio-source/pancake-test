@@ -83,38 +83,30 @@ export async function render(container, { tagMap }) {
     }
 
     // Layout skeleton
-    container.innerHTML = `
-        <div class="kpi-grid" id="kpi-container">
-            ${Array(14).fill('<div class="kpi-card"><div class="skeleton" style="height:14px;width:60px;margin-bottom:8px"></div><div class="skeleton" style="height:28px;width:80px"></div></div>').join('')}
-        </div>
-        <div class="chart-grid chart-grid-3" style="margin-top:12px" id="charts-row-1">
-            ${Array(3).fill('<div class="chart-card"><div class="skeleton" style="height:260px"></div></div>').join('')}
-        </div>
-        <div class="chart-grid chart-grid-2" style="margin-top:12px" id="charts-row-2">
-            ${Array(2).fill('<div class="chart-card"><div class="skeleton" style="height:260px"></div></div>').join('')}
-        </div>
-        <div class="chart-grid chart-grid-3" style="margin-top:12px" id="charts-row-3">
-            ${Array(3).fill('<div class="chart-card"><div class="skeleton" style="height:260px"></div></div>').join('')}
-        </div>
-        <!-- Row 3: Staff Performance Table -->
-        <div class="card" style="margin-top:16px">
-            <div class="chart-title"><i data-lucide="users-2"></i> Chi tiết nhân viên</div>
-            <div id="dash-staff-table" style="margin-top:8px;overflow-x:auto">
-                <div class="skeleton" style="height:200px"></div>
-            </div>
-        </div>
-        <!-- Row 4: Customer Detail Table -->
-        <div class="card" style="margin-top:16px">
-            <div class="chart-title" style="display:flex;justify-content:space-between;align-items:center">
-                <span><i data-lucide="contact-2"></i> Chi tiết khách hàng</span>
-                <span id="dash-cust-info" style="font-size:12px;color:var(--text-muted)"></span>
-            </div>
-            <div id="dash-customer-table" style="margin-top:8px;overflow-x:auto">
-                <div class="skeleton" style="height:200px"></div>
-            </div>
-            <div id="dash-cust-pagination" style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:12px"></div>
-        </div>
-    `;
+    container.innerHTML = ''
+        + '<div class="kpi-grid kpi-grid-7" id="kpi-container">'
+        + Array(14).fill('<div class="kpi-card"><div class="skeleton" style="height:14px;width:60px;margin-bottom:8px"></div><div class="skeleton" style="height:28px;width:80px"></div></div>').join('')
+        + '</div>'
+        + '<div class="chart-grid chart-grid-3" style="margin-top:12px" id="charts-row-1">'
+        + Array(3).fill('<div class="chart-card"><div class="skeleton" style="height:260px"></div></div>').join('')
+        + '</div>'
+        + '<div class="chart-grid chart-grid-3" style="margin-top:12px" id="charts-row-2">'
+        + Array(3).fill('<div class="chart-card"><div class="skeleton" style="height:260px"></div></div>').join('')
+        + '</div>'
+        + '<div class="chart-grid chart-grid-3" style="margin-top:12px" id="charts-row-3">'
+        + Array(3).fill('<div class="chart-card"><div class="skeleton" style="height:260px"></div></div>').join('')
+        + '</div>'
+        + '<div class="card" style="margin-top:16px">'
+        + '<div class="chart-title"><i data-lucide="users-2"></i> Chi tiết nhân viên</div>'
+        + '<div id="dash-staff-table" style="margin-top:8px;overflow-x:auto"><div class="skeleton" style="height:200px"></div></div>'
+        + '</div>'
+        + '<div class="card" style="margin-top:16px">'
+        + '<div class="chart-title" style="display:flex;justify-content:space-between;align-items:center">'
+        + '<span><i data-lucide="contact-2"></i> Chi tiết khách hàng</span>'
+        + '<span id="dash-cust-info" style="font-size:12px;color:var(--text-muted)"></span></div>'
+        + '<div id="dash-customer-table" style="margin-top:8px;overflow-x:auto"><div class="skeleton" style="height:200px"></div></div>'
+        + '<div id="dash-cust-pagination" style="display:flex;gap:8px;justify-content:center;align-items:center;margin-top:12px"></div>'
+        + '</div>';
     if (window.lucide) window.lucide.createIcons();
 
     // Load pages list for filter
@@ -173,8 +165,14 @@ async function fetchAndRender(container, tagMap) {
         if (pageId) staffUrl += `&pageId=${pageId}`;
         const staffData = await apiGet(staffUrl);
 
-        // Render 8 Charts Layout
-        render8Charts(trendData, topCampData, staffData, tagMap, { from, to, preset });
+        // Fetch channels data for Phễu QC + Page Spend
+        let chUrl = '/channels?from=' + from + '&to=' + to;
+        if (pageId) chUrl += '&pageId=' + pageId;
+        const chData = await apiGet(chUrl).catch(() => []);
+        const channels = Array.isArray(chData) ? chData : (chData.data || []);
+
+        // Render 9 Charts (3×3)
+        render8Charts(trendData, topCampData, staffData, tagMap, { from, to, preset }, channels);
 
         // ─── Fetch customers with tag filters (paginated) ───
         const tagFilters = [branchFilter, staffFilter, statusFilter, serviceFilter].filter(Boolean);
@@ -228,7 +226,7 @@ function renderKpis(data) {
     if (window.lucide) window.lucide.createIcons();
 }
 
-export async function render8Charts(trendData, topCampData, staffData, tagMap, reqData) {
+export async function render8Charts(trendData, topCampData, staffData, tagMap, reqData, channels) {
     if (window.lucide) window.lucide.createIcons();
 
     // Tooltip styling only
@@ -243,38 +241,33 @@ export async function render8Charts(trendData, topCampData, staffData, tagMap, r
         Chart.defaults.plugins.tooltip.cornerRadius = 8;
     }
 
-    // Destroy old charts to prevent memory leaks and overlapping renders
+    // Destroy old charts
     Object.values(charts).forEach(c => c && c.destroy && c.destroy());
-    
-    // R1
+
+    // Row 1: Conversations, Revenue, Branch Comparison
     renderChart1_Conversations(trendData);
     renderChart2_Revenue(trendData);
-    
-    // R2
+    await renderChart7_Branch(staffData, reqData, tagMap);
+
+    // Row 2: MKT, WrongTarget, StatusPie
     renderChart3_Marketing(trendData);
     renderChart4_WrongTarget(trendData);
-    renderChart5_TopCampaigns(topCampData);
-    
-    // R3
     await renderChart6_StatusByTag(tagMap);
-    renderChart7_Branch(staffData, reqData, tagMap);
-    renderChart8_Funnel(staffData);
+
+    // Row 3: Top10, Ads Funnel, Page Spend
+    renderChart5_TopCampaigns(topCampData);
+    renderAdsFunnel(channels || []);
+    renderPageSpend(channels || []);
 }
 
 function renderChart1_Conversations(data) {
     const row = document.getElementById('charts-row-1');
     if (!row) return;
     if (!row.querySelector('#chart-conversations')) {
-        row.innerHTML = `
-            <div class="chart-card">
-                <div class="chart-title"><i data-lucide="message-circle" class="text-blue-500"></i> Xu hướng hội thoại</div>
-                <div style="height:260px"><canvas id="chart-conversations"></canvas></div>
-            </div>
-            <div class="chart-card">
-                <div class="chart-title"><i data-lucide="dollar-sign" class="text-green-500"></i> Xu hướng Đơn chốt</div>
-                <div style="height:260px"><canvas id="chart-revenue"></canvas></div>
-            </div>
-        `;
+        row.innerHTML = ''
+            + '<div class="chart-card"><div class="chart-title"><i data-lucide="message-circle"></i> Xu hướng hội thoại</div><div style="height:260px"><canvas id="chart-conversations"></canvas></div></div>'
+            + '<div class="chart-card"><div class="chart-title"><i data-lucide="dollar-sign"></i> Xu hướng Đơn chốt</div><div style="height:260px"><canvas id="chart-revenue"></canvas></div></div>'
+            + '<div class="chart-card"><div class="chart-title"><i data-lucide="map"></i> So sánh chi nhánh</div><div style="height:260px"><canvas id="chart-branch-comparison"></canvas></div></div>';
         if (window.lucide) window.lucide.createIcons();
     }
     
@@ -294,7 +287,7 @@ function renderChart1_Conversations(data) {
         },
         options: {
             responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false }, datalabels: { display: false } },
+            plugins: { legend: { display: false }, datalabels: { anchor: 'end', align: 'end', font: { size: 9, weight: '600' }, color: '#334155', formatter: v => v > 0 ? fmtTick(v) : '' } },
             scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { grid: { color: 'rgba(148,163,184,0.08)' }, ticks: { font: { size: 10 }, callback: fmtTick } } }
         }
     });
@@ -317,7 +310,7 @@ function renderChart2_Revenue(data) {
         },
         options: {
             responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: false }, datalabels: { display: false } },
+            plugins: { legend: { display: false }, datalabels: { anchor: 'end', align: 'end', font: { size: 9, weight: '600' }, color: '#334155', formatter: v => v > 0 ? fmtTick(v) : '' } },
             scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { grid: { color: 'rgba(148,163,184,0.08)' }, ticks: { font: { size: 10 }, callback: fmtTick } } }
         }
     });
@@ -327,20 +320,10 @@ function renderChart3_Marketing(data) {
     const row = document.getElementById('charts-row-2');
     if (!row) return;
     if (!row.querySelector('#chart-marketing')) {
-        row.innerHTML = `
-            <div class="chart-card">
-                <div class="chart-title"><i data-lucide="trending-up" class="text-purple-500"></i> Hiệu suất MKT (Inbox vs Hội thoại Ads)</div>
-                <div style="height:260px"><canvas id="chart-marketing"></canvas></div>
-            </div>
-            <div class="chart-card">
-                <div class="chart-title"><i data-lucide="alert-triangle" class="text-red-500"></i> Xu hướng Sai đối tượng</div>
-                <div style="height:260px"><canvas id="chart-wrong-target"></canvas></div>
-            </div>
-            <div class="chart-card">
-                <div class="chart-title"><i data-lucide="award" class="text-orange-500"></i> Top 10 Chiến dịch</div>
-                <div style="height:260px"><canvas id="chart-top-campaigns"></canvas></div>
-            </div>
-        `;
+        row.innerHTML = ''
+            + '<div class="chart-card"><div class="chart-title"><i data-lucide="trending-up"></i> Hiệu suất MKT (Inbox vs Chi phí Ads)</div><div style="height:260px"><canvas id="chart-marketing"></canvas></div></div>'
+            + '<div class="chart-card"><div class="chart-title"><i data-lucide="alert-triangle"></i> Xu hướng Sai đối tượng</div><div style="height:260px"><canvas id="chart-wrong-target"></canvas></div></div>'
+            + '<div class="chart-card"><div class="chart-title"><i data-lucide="pie-chart"></i> Phân bố trạng thái KH</div><div style="height:260px"><canvas id="chart-message-status"></canvas></div></div>';
         if (window.lucide) window.lucide.createIcons();
     }
     
@@ -424,6 +407,16 @@ function renderChart4_WrongTarget(data) {
 }
 
 function renderChart5_TopCampaigns(topCampData) {
+    const row = document.getElementById('charts-row-3');
+    if (!row) return;
+    if (!row.querySelector('#chart-top-campaigns')) {
+        row.innerHTML = ''
+            + '<div class="chart-card"><div class="chart-title"><i data-lucide="award"></i> Top 10 Chiến dịch</div><div style="height:260px"><canvas id="chart-top-campaigns"></canvas></div></div>'
+            + '<div class="chart-card"><div class="chart-title"><i data-lucide="megaphone"></i> Phễu quảng cáo</div><div id="ads-funnel" style="height:260px;overflow-y:auto;padding:8px 0"></div></div>'
+            + '<div class="chart-card"><div class="chart-title"><i data-lucide="bar-chart-3"></i> So sánh Pages (chi phí)</div><div style="height:260px"><canvas id="page-spend-chart"></canvas></div></div>';
+        if (window.lucide) window.lucide.createIcons();
+    }
+
     const ctx = document.getElementById('chart-top-campaigns')?.getContext('2d');
     if (!ctx || !topCampData || !topCampData.length) return;
     
@@ -445,32 +438,15 @@ function renderChart5_TopCampaigns(topCampData) {
             indexAxis: 'y',
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { display: false }, datalabels: { display: false }, tooltip: { callbacks: { title: (ctx) => sorted[ctx[0].dataIndex].name } } },
-            scales: { x: { grid: { color: 'rgba(148,163,184,0.1)' }, ticks: { font: { size: 10 }, color: '#94A3B8' } }, y: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#E2E8F0' } } }
+            scales: {
+                x: { grid: { color: 'rgba(148,163,184,0.1)' }, ticks: { font: { size: 10 }, callback: fmtTick } },
+                y: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#1E293B' } }
+            }
         }
     });
 }
 
 async function renderChart6_StatusByTag(tagMap) {
-    const row = document.getElementById('charts-row-3');
-    if (!row) return;
-    if (!row.querySelector('#chart-message-status')) {
-        row.innerHTML = `
-            <div class="chart-card">
-                <div class="chart-title"><i data-lucide="pie-chart" class="text-indigo-500"></i> Phân bố trạng thái KH</div>
-                <div style="height:260px"><canvas id="chart-message-status"></canvas></div>
-            </div>
-            <div class="chart-card">
-                <div class="chart-title"><i data-lucide="map" class="text-teal-500"></i> So sánh chi nhánh</div>
-                <div style="height:260px"><canvas id="chart-branch-comparison"></canvas></div>
-            </div>
-            <div class="chart-card">
-                <div class="chart-title"><i data-lucide="filter" class="text-cyan-500"></i> Phễu chuyển đổi</div>
-                <div id="funnel-container" style="height:260px;overflow-y:auto;padding:8px 0"></div>
-            </div>
-        `;
-        if (window.lucide) window.lucide.createIcons();
-    }
-
     const pieCtx = document.getElementById('chart-message-status')?.getContext('2d');
     if (!pieCtx) return;
 
@@ -532,28 +508,63 @@ async function renderChart7_Branch(staffData, reqData, tagMap) {
     } catch { /* ignore */ }
 }
 
-function renderChart8_Funnel(staffData) {
-    const funnelEl = document.getElementById('funnel-container');
-    if (!funnelEl || !staffData?.totals) return;
-    const t = staffData.totals;
-    const steps = [
-        { label: 'Hội thoại', value: t.conversations, color: 'var(--blue)' },
-        { label: 'Khách hàng', value: t.customers, color: '#8B5CF6' },
-        { label: 'Có SĐT', value: t.phone, color: 'var(--orange)' },
-        { label: 'Đã chốt', value: t.signed, color: 'var(--green)' },
+// ─── Ads Funnel (from channels data) ───
+function renderAdsFunnel(channels) {
+    var funnelEl = document.getElementById('ads-funnel');
+    if (!funnelEl) return;
+    var totalSpend = 0, totalImpr = 0, totalClicks = 0, totalConv = 0, totalPhones = 0;
+    for (var i = 0; i < channels.length; i++) {
+        totalSpend += Number(channels[i].spend || 0);
+        totalImpr += Number(channels[i].impressions || 0);
+        totalClicks += Number(channels[i].clicks || 0);
+        totalConv += Number(channels[i].conversations || 0);
+        totalPhones += Number(channels[i].phones || 0);
+    }
+    var steps = [
+        { label: 'Hiển thị', value: totalImpr, color: '#8B5CF6' },
+        { label: 'Click', value: totalClicks, color: 'var(--orange)' },
+        { label: 'Hội thoại', value: totalConv, color: 'var(--blue)' },
+        { label: 'Có SĐT', value: totalPhones, color: 'var(--green)' },
     ];
-    const maxVal = Math.max(steps[0].value, 1);
-    funnelEl.innerHTML = `<div class="funnel">${steps.map(s => `
-        <div class="funnel-step">
-            <div class="funnel-label">${s.label}</div>
-            <div class="funnel-bar-wrapper">
-                <div class="funnel-bar" style="width:${Math.max((s.value / maxVal * 100), 3)}%;background:${s.color}">
-                    ${fmtNumber(s.value)}
-                </div>
-            </div>
-            <div class="funnel-count">${s.value > 0 && s !== steps[0] ? fmtPercent(s.value / steps[0].value * 100) : ''}</div>
-        </div>
-    `).join('')}</div>`;
+    var maxVal = Math.max(totalImpr, 1);
+    var html = '<div class="funnel">';
+    for (var i = 0; i < steps.length; i++) {
+        var s = steps[i];
+        var pct = Math.max((s.value / maxVal * 100), 3);
+        var rateTxt = i > 0 && totalImpr > 0 ? fmtPercent(s.value / totalImpr * 100) : '';
+        html += '<div class="funnel-step">';
+        html += '<div class="funnel-label">' + s.label + '</div>';
+        html += '<div class="funnel-bar-wrapper"><div class="funnel-bar" style="width:' + pct + '%;background:' + s.color + '">' + fmtNumber(s.value) + '</div></div>';
+        html += '<div class="funnel-count">' + rateTxt + '</div></div>';
+    }
+    html += '</div>';
+    funnelEl.innerHTML = html;
+}
+
+// ─── Page Spend Chart (from channels data) ───
+function renderPageSpend(channels) {
+    var ctx = document.getElementById('page-spend-chart')?.getContext('2d');
+    if (!ctx) return;
+    // Agg spend by page
+    var pageMap = {};
+    for (var i = 0; i < channels.length; i++) {
+        var pn = channels[i].pageName || channels[i].page_id || 'Unknown';
+        pageMap[pn] = (pageMap[pn] || 0) + Number(channels[i].spend || 0);
+    }
+    var entries = Object.entries(pageMap).sort((a, b) => b[1] - a[1]);
+    if (entries.length === 0) return;
+    charts.cPageSpend = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: entries.map(e => e[0]),
+            datasets: [{ label: 'Chi phí', data: entries.map(e => e[1]), backgroundColor: ['#3B82F6','#8B5CF6','#10B981','#F59E0B','#EF4444','#EC4899','#6366F1','#14B8A6','#F97316','#84CC16'], borderRadius: 4 }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false }, datalabels: { display: false } },
+            scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { grid: { color: 'rgba(148,163,184,0.08)' }, ticks: { font: { size: 10 }, callback: fmtTick } } }
+        }
+    });
 }
 
 // ─── Staff Performance Table ───
@@ -643,7 +654,7 @@ function renderCustomerTable(custData, tagMap, pagination, container) {
     }
 
     let html = '<table class="data-table"><thead><tr>';
-    html += '<th>Khách hàng</th><th>SĐT</th><th>Tags</th><th class="text-right">Hội thoại</th><th>Hoạt động cuối</th>';
+    html += '<th>Khách hàng</th><th>Nguồn</th><th>SĐT</th><th>Tags</th><th class="text-right">Hội thoại</th><th>Hoạt động cuối</th>';
     html += '</tr></thead><tbody>';
     for (const c of custData) {
         let phone = '';
@@ -667,6 +678,7 @@ function renderCustomerTable(custData, tagMap, pagination, container) {
         }
         html += '<tr class="clickable" data-customer-id="' + c.pancake_id + '" data-customer-name="' + (c.name || '') + '">';
         html += '<td style="font-weight:600">' + (c.name || '—') + '</td>';
+        html += '<td style="font-size:11px;color:var(--text-secondary)">' + (c.page_name || c.source || '—') + '</td>';
         html += '<td style="font-size:12px">' + (phone || '<span style="color:var(--text-muted)">—</span>') + '</td>';
         html += '<td style="display:flex;gap:4px;flex-wrap:wrap">' + tagHtml + '</td>';
         html += '<td class="text-right">' + fmtNumber(c.total_conversations) + '</td>';
