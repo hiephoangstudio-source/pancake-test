@@ -3,6 +3,9 @@ import { fmtNumber, fmtMoney, fmtPercent, getDateRange } from '../utils/format.j
 import { renderKpiCard, renderKpiGrid } from '../components/kpiCard.js';
 
 let charts = {};
+let currentPage = 1;
+const PAGE_SIZE = 25;
+
 export function destroy() { Object.values(charts).forEach(c => c.destroy()); charts = {}; }
 
 export async function render(container, { tagMap }) {
@@ -53,10 +56,11 @@ export async function render(container, { tagMap }) {
                     <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-muted)">Đang tải...</td></tr>
                 </tbody>
             </table>
+            <div id="ch-pagination" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--border);font-size:13px"></div>
         </div>
     `;
-    if (window.lucide) window.lucide.createIcons();
 
+    // Load pages dropdown
     try {
         const pages = await apiGet('/pages');
         const sel = document.getElementById('ch-page');
@@ -68,10 +72,12 @@ export async function render(container, { tagMap }) {
         });
     } catch {}
 
-    const load = () => fetchChannels();
+    if (window.lucide) window.lucide.createIcons();
+
+    const load = () => { currentPage = 1; fetchChannels(); };
     document.getElementById('ch-time')?.addEventListener('change', load);
     document.getElementById('ch-page')?.addEventListener('change', load);
-    await load();
+    await fetchChannels();
 }
 
 async function fetchChannels() {
@@ -80,19 +86,36 @@ async function fetchChannels() {
     const { from, to } = getDateRange(preset);
 
     try {
-        let url = `/channels?from=${from}&to=${to}`;
+        let url = `/channels?from=${from}&to=${to}&limit=${PAGE_SIZE}&page=${currentPage}`;
         if (pageId) url += `&pageId=${pageId}`;
         const data = await apiGet(url);
         const channels = Array.isArray(data) ? data : (data.data || data.channels || []);
+        const pagination = data.pagination || {};
+        const total = pagination.total || channels.length;
+        const totalPages = pagination.totalPages || Math.ceil(total / PAGE_SIZE);
 
-        // Aggregate
+        // Aggregate KPIs from summary endpoint for accurate totals
+        let summaryUrl = `/channels/summary`;
+        if (pageId) summaryUrl += `?pageId=${pageId}`;
         let totalSpend = 0, totalImpressions = 0, totalClicks = 0, totalConv = 0, totalPhones = 0;
-        for (const ch of channels) {
-            totalSpend += Number(ch.spend || 0);
-            totalImpressions += Number(ch.impressions || 0);
-            totalClicks += Number(ch.clicks || 0);
-            totalConv += Number(ch.conversations || 0);
-            totalPhones += Number(ch.phones || 0);
+        let activeAds = 0, inactiveAds = 0;
+        try {
+            const summary = await apiGet(summaryUrl);
+            totalSpend = Number(summary.total_spend || 0);
+            totalImpressions = Number(summary.total_impressions || 0);
+            totalClicks = Number(summary.total_clicks || 0);
+            totalConv = Number(summary.total_conversations || 0);
+            totalPhones = Number(summary.total_phones || 0);
+            activeAds = Number(summary.active_ads || 0);
+            inactiveAds = Number(summary.inactive_ads || 0);
+        } catch {
+            for (const ch of channels) {
+                totalSpend += Number(ch.spend || 0);
+                totalImpressions += Number(ch.impressions || 0);
+                totalClicks += Number(ch.clicks || 0);
+                totalConv += Number(ch.conversations || 0);
+                totalPhones += Number(ch.phones || 0);
+            }
         }
 
         const cpc = totalClicks > 0 ? totalSpend / totalClicks : 0;
@@ -109,12 +132,11 @@ async function fetchChannels() {
                 renderKpiCard({ label: 'CTR', value: fmtPercent(ctr), icon: 'percent', color: 'var(--cyan)' }),
                 renderKpiCard({ label: 'Hội thoại', value: fmtNumber(totalConv), icon: 'message-circle', color: 'var(--blue)' }),
                 renderKpiCard({ label: 'SĐT', value: fmtNumber(totalPhones), icon: 'phone', color: 'var(--green)' }),
-                renderKpiCard({ label: 'CPC', value: fmtMoney(cpc), icon: 'coins', color: 'var(--orange)' }),
-                renderKpiCard({ label: 'Chi phí/SĐT', value: fmtMoney(cpl), icon: 'target', color: 'var(--red)' }),
+                renderKpiCard({ label: 'Đang chạy', value: fmtNumber(activeAds), icon: 'play-circle', color: 'var(--green)' }),
+                renderKpiCard({ label: 'Tạm dừng', value: fmtNumber(inactiveAds), icon: 'pause-circle', color: 'var(--text-muted)' }),
             ]);
             if (window.lucide) window.lucide.createIcons();
         }
-
 
         // Campaigns table
         const tbody = document.getElementById('campaigns-body');
@@ -122,25 +144,35 @@ async function fetchChannels() {
             if (channels.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-muted)">Chưa có dữ liệu quảng cáo</td></tr>';
             } else {
-                tbody.innerHTML = channels
-                    .sort((a, b) => Number(b.spend || 0) - Number(a.spend || 0))
-                    .map(ch => {
-                        const costPerPhone = Number(ch.phones) > 0 ? Number(ch.spend) / Number(ch.phones) : 0;
-                        const statusColor = ch.status === 'ACTIVE' ? 'var(--green)' : 'var(--text-muted)';
-                        return `
-                        <tr>
-                            <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ch.name || ch.ad_id}</td>
-                            <td style="font-size:12px;color:var(--text-secondary)">${ch.pageName || ch.page_id || '—'}</td>
-                            <td class="text-right" style="font-weight:600">${fmtMoney(ch.spend)}</td>
-                            <td class="text-right">${fmtNumber(ch.impressions)}</td>
-                            <td class="text-right">${fmtNumber(ch.clicks)}</td>
-                            <td class="text-right">${fmtNumber(ch.conversations)}</td>
-                            <td class="text-right">${fmtNumber(ch.phones)}</td>
-                            <td class="text-right" style="color:${costPerPhone > 500000 ? 'var(--red)' : 'var(--green)'}; font-weight:600">${costPerPhone > 0 ? fmtMoney(costPerPhone) : '—'}</td>
-                            <td class="text-center"><span class="tag" style="color:${statusColor}">${ch.status || '—'}</span></td>
-                        </tr>`;
-                    }).join('');
+                tbody.innerHTML = channels.map(ch => {
+                    const costPerPhone = Number(ch.phones) > 0 ? Number(ch.spend) / Number(ch.phones) : 0;
+                    const statusColor = ch.status === 'ACTIVE' ? 'var(--green)' : 'var(--text-muted)';
+                    return `
+                    <tr>
+                        <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ch.name || ch.ad_id}</td>
+                        <td style="font-size:12px;color:var(--text-secondary)">${ch.pageName || ch.page_id || '—'}</td>
+                        <td class="text-right" style="font-weight:600">${fmtMoney(ch.spend)}</td>
+                        <td class="text-right">${fmtNumber(ch.impressions)}</td>
+                        <td class="text-right">${fmtNumber(ch.clicks)}</td>
+                        <td class="text-right">${fmtNumber(ch.conversations)}</td>
+                        <td class="text-right">${fmtNumber(ch.phones)}</td>
+                        <td class="text-right" style="color:${costPerPhone > 500000 ? 'var(--red)' : 'var(--green)'}; font-weight:600">${costPerPhone > 0 ? fmtMoney(costPerPhone) : '—'}</td>
+                        <td class="text-center"><span class="tag" style="color:${statusColor}">${ch.status || '—'}</span></td>
+                    </tr>`;
+                }).join('');
             }
+        }
+
+        // Pagination
+        const pgnEl = document.getElementById('ch-pagination');
+        if (pgnEl) {
+            pgnEl.innerHTML = `
+                <button class="btn btn-sm" id="ch-prev" ${currentPage <= 1 ? 'disabled' : ''} style="padding:4px 12px;font-size:12px;cursor:pointer">← Trước</button>
+                <span style="color:var(--text-secondary)">Trang ${currentPage}/${totalPages} (${fmtNumber(total)} chiến dịch)</span>
+                <button class="btn btn-sm" id="ch-next" ${currentPage >= totalPages ? 'disabled' : ''} style="padding:4px 12px;font-size:12px;cursor:pointer">Sau →</button>
+            `;
+            document.getElementById('ch-prev')?.addEventListener('click', () => { if (currentPage > 1) { currentPage--; fetchChannels(); } });
+            document.getElementById('ch-next')?.addEventListener('click', () => { if (currentPage < totalPages) { currentPage++; fetchChannels(); } });
         }
     } catch (err) {
         console.error('Lỗi tải kênh QC:', err);

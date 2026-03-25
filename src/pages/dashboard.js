@@ -420,7 +420,7 @@ function renderChart5_TopCampaigns(topCampData) {
     const ctx = document.getElementById('chart-top-campaigns')?.getContext('2d');
     if (!ctx || !topCampData || !topCampData.length) return;
     
-    const sorted = [...topCampData].sort((a, b) => (b.spend || b.conversations || 0) - (a.spend || a.conversations || 0)).slice(0, 10);
+    const sorted = [...topCampData].sort((a, b) => (b.conversations || 0) - (a.conversations || 0)).slice(0, 10);
     if (sorted.length === 0) return;
     
     charts.c5 = new Chart(ctx, {
@@ -428,9 +428,9 @@ function renderChart5_TopCampaigns(topCampData) {
         data: {
             labels: sorted.map(d => d.name.length > 25 ? d.name.substring(0,25)+'...' : d.name),
             datasets: [{
-                label: 'Chi phí',
-                data: sorted.map(d => d.spend || 0),
-                backgroundColor: '#F59E0B',
+                label: 'Hội thoại',
+                data: sorted.map(d => d.conversations || 0),
+                backgroundColor: '#3B82F6',
                 borderRadius: 4
             }]
         },
@@ -592,6 +592,7 @@ function renderStaffTable(staffData, staffTagCounts, tagMap, staffFilter) {
         <th class="text-right">Hẹn đến</th>
         <th class="text-right">Có SĐT</th>
         <th class="text-right">Sai ĐT</th>
+        <th class="text-right">Tỷ lệ SĐT</th>
         <th class="text-right">Đã chốt</th>
         <th class="text-right">Tỷ lệ chốt</th>
     </tr></thead><tbody>${displayStaff.map(s => {
@@ -617,6 +618,7 @@ function renderStaffTable(staffData, staffTagCounts, tagMap, staffFilter) {
             <td class="text-right" style="color:var(--purple)">${fmtNumber(staffVisiting)}</td>
             <td class="text-right" style="color:var(--green)">${fmtNumber(s.phone)}</td>
             <td class="text-right" style="color:var(--red)">${fmtNumber(staffWrong)}</td>
+            <td class="text-right" style="color:${s.conversations > 0 ? ((s.phone / s.conversations * 100) > 5 ? 'var(--green)' : 'var(--orange)') : 'var(--text-muted)'}">${s.conversations > 0 ? fmtPercent(s.phone / s.conversations * 100) : '—'}</td>
             <td class="text-right" style="color:var(--green);font-weight:600">${fmtNumber(staffSigned)}</td>
             <td class="text-right" style="color:${rate > 10 ? 'var(--green)' : 'var(--orange)'}">${fmtPercent(rate)}</td>
         </tr>`;
@@ -631,6 +633,7 @@ function renderStaffTable(staffData, staffTagCounts, tagMap, staffFilter) {
         <td class="text-right">${fmtNumber(Object.values(staffTagCounts).reduce((a,t) => a+t.visiting, 0))}</td>
         <td class="text-right">${fmtNumber(displayStaff.reduce((a,s) => a+s.phone, 0))}</td>
         <td class="text-right">${fmtNumber(Object.values(staffTagCounts).reduce((a,t) => a+t.wrong, 0))}</td>
+        <td class="text-right">—</td>
         <td class="text-right">${fmtNumber(Object.values(staffTagCounts).reduce((a,t) => a+t.signed, 0))}</td>
         <td class="text-right">—</td>
     </tr>
