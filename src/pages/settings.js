@@ -24,7 +24,7 @@ export async function render(container) {
         + '<div id="pages-list" style="margin-top:8px;overflow-x:auto;max-height:360px;overflow-y:auto">Đang tải...</div>'
         + '</div>'
         + '</div>'
-        // Row 2: Token + Sync + Add Page
+        // Row 2: Token + Sync + Auto-Sync
         + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px" class="settings-grid">'
         + '<div class="card">'
         + '<div class="chart-title"><i data-lucide="key"></i> Master Token</div>'
@@ -41,6 +41,25 @@ export async function render(container) {
         + '<div id="sync-custom-dates" style="display:none;gap:8px;margin-bottom:8px"><input type="date" id="sync-from" class="filter-select" /><span style="color:var(--text-muted)">→</span><input type="date" id="sync-to" class="filter-select" /></div>'
         + '<div id="sync-status" style="font-size:12px;color:var(--text-muted)"></div>'
         + '</div>'
+        + '<div class="card">'
+        + '<div class="chart-title"><i data-lucide="timer"></i> Smart Sync</div>'
+        + '<div style="margin-top:8px">'
+        + '<select class="filter-select" id="auto-sync-interval" style="width:100%;margin-bottom:8px">'
+        + '<option value="0">Tắt</option>'
+        + '<option value="0.5">Mỗi 30 phút</option>'
+        + '<option value="1">Mỗi 1 giờ</option>'
+        + '<option value="3">Mỗi 3 giờ</option>'
+        + '<option value="6">Mỗi 6 giờ</option>'
+        + '<option value="12">Mỗi 12 giờ</option>'
+        + '<option value="24">Mỗi ngày</option>'
+        + '</select>'
+        + '<div id="auto-sync-status" style="font-size:12px;color:var(--text-muted);margin-bottom:8px"></div>'
+        + '<button class="btn btn-primary" id="save-auto-sync-btn" style="width:100%"><i data-lucide="save"></i> Lưu lịch</button>'
+        + '</div>'
+        + '</div>'
+        + '</div>'
+        // Row 3: Add Page
+        + '<div style="display:grid;grid-template-columns:1fr;gap:16px;margin-top:16px;max-width:400px">'
         + '<div class="card">'
         + '<div class="chart-title"><i data-lucide="plus-circle"></i> Thêm trang mới</div>'
         + '<input id="new-page-id" placeholder="Page ID" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;margin-top:8px;margin-bottom:6px" />'
@@ -70,6 +89,24 @@ export async function render(container) {
     document.getElementById('save-token-btn')?.addEventListener('click', saveToken);
     document.getElementById('sync-run-btn')?.addEventListener('click', runSync);
     document.getElementById('save-config-btn')?.addEventListener('click', function() { toastSuccess('✅ Cấu hình đã được lưu!'); });
+    document.getElementById('save-auto-sync-btn')?.addEventListener('click', saveAutoSync);
+
+    // Load auto-sync status
+    try {
+        var autoSync = await apiGet('/sync/auto-sync');
+        var intervalEl = document.getElementById('auto-sync-interval');
+        var statusEl = document.getElementById('auto-sync-status');
+        if (intervalEl && autoSync.interval_hours != null) intervalEl.value = autoSync.interval_hours;
+        if (statusEl) {
+            if (autoSync.interval_hours > 0) {
+                var label = autoSync.interval_hours < 1 ? (autoSync.interval_hours * 60) + ' phút' : autoSync.interval_hours + 'h';
+                statusEl.innerHTML = '<span style="color:var(--green)">✅ Smart Sync: mỗi ' + label + '</span>' + 
+                    (autoSync.last_sync ? '<br>Lần cuối: ' + new Date(autoSync.last_sync).toLocaleString('vi-VN') : '');
+            } else {
+                statusEl.textContent = '⏸ Đang tắt';
+            }
+        }
+    } catch {}
 }
 
 async function loadUsers() {
@@ -78,17 +115,45 @@ async function loadUsers() {
         var el = document.getElementById('users-table');
         if (!el) return;
         if (!users || users.length === 0) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px">Chưa có dữ liệu</div>'; return; }
-        var html = '<table class="data-table"><thead><tr><th></th><th>Tên</th><th>ID</th><th>Quyền</th></tr></thead><tbody>';
+        var html = '<table class="data-table"><thead><tr><th></th><th>Tên</th><th>ID</th><th>Quyền</th><th style="width:40px"></th></tr></thead><tbody>';
         for (var i = 0; i < users.length; i++) {
             var u = users[i];
             var init = (u.name || 'U')[0].toUpperCase();
             var av = u.avatar ? '<img src="' + u.avatar + '" style="width:26px;height:26px;border-radius:50%;object-fit:cover" onerror="this.style.display=\'none\'" />'
                 : '<div style="width:26px;height:26px;border-radius:50%;background:linear-gradient(135deg,#3B82F6,#8B5CF6);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:700">' + init + '</div>';
             var badge = u.role === 'admin' ? '<span class="tag tag-lifecycle" style="font-size:10px">Admin</span>' : '<span class="tag" style="font-size:10px">User</span>';
-            html += '<tr><td style="width:36px">' + av + '</td><td style="font-weight:600">' + (u.name || '\u2014') + '</td><td style="font-size:11px;color:var(--text-muted);font-family:monospace">' + u.pancake_id.substring(0,8) + '...</td><td>' + badge + '</td></tr>';
+            html += '<tr data-user-id="' + u.pancake_id + '" data-user-name="' + (u.name || '') + '">';
+            html += '<td style="width:36px">' + av + '</td>';
+            html += '<td style="font-weight:600" class="user-name-cell">' + (u.name || '\u2014') + '</td>';
+            html += '<td style="font-size:11px;color:var(--text-muted);font-family:monospace">' + u.pancake_id.substring(0,8) + '...</td>';
+            html += '<td>' + badge + '</td>';
+            html += '<td><button class="btn-icon btn-icon-sm edit-user-btn" title="Sửa tên"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button></td>';
+            html += '</tr>';
         }
         html += '</tbody></table>';
         el.innerHTML = html;
+
+        // Bind edit handlers
+        el.querySelectorAll('.edit-user-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var row = btn.closest('tr');
+                var cell = row.querySelector('.user-name-cell');
+                var uid = row.dataset.userId;
+                var curName = row.dataset.userName;
+                cell.innerHTML = '<input class="inline-edit-input" value="' + curName + '" />';
+                var inp = cell.querySelector('input');
+                inp.focus(); inp.select();
+                var save = async function() {
+                    var newName = inp.value.trim();
+                    if (newName && newName !== curName) {
+                        try { await apiPost('/users/' + uid, { name: newName }); toastSuccess('Đã đổi tên!'); } catch(e) { toastError(e.message); }
+                    }
+                    await loadUsers();
+                };
+                inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') save(); if (e.key === 'Escape') loadUsers(); });
+                inp.addEventListener('blur', save);
+            });
+        });
     } catch (err) { console.error('Load users error:', err); }
 }
 
@@ -175,11 +240,30 @@ async function runSync() {
     }
     if (statusEl) statusEl.textContent = '\u23F3 Đang đồng bộ ' + days + ' ngày...';
     try {
-        await apiPost('/sync/trigger', { days: days });
+        await apiPost('/sync/all', { days_back: days });
         if (statusEl) statusEl.textContent = '\u2705 Đồng bộ ' + days + ' ngày OK';
         toastSuccess('Đồng bộ ' + days + ' ngày thành công');
     } catch (err) {
         if (statusEl) statusEl.textContent = '\u274C ' + err.message;
+        toastError(err.message);
+    }
+}
+
+async function saveAutoSync() {
+    var interval = parseInt(document.getElementById('auto-sync-interval')?.value || '0');
+    var statusEl = document.getElementById('auto-sync-status');
+    try {
+        await apiPost('/sync/auto-sync', { interval_hours: interval });
+        if (statusEl) {
+            if (interval > 0) {
+                var label = interval < 1 ? (interval * 60) + ' phút' : interval + 'h';
+                statusEl.innerHTML = '<span style="color:var(--green)">✅ Smart Sync: mỗi ' + label + '</span>';
+            } else {
+                statusEl.textContent = '⏸ Đã tắt';
+            }
+        }
+        toastSuccess(interval > 0 ? 'Smart Sync mỗi ' + (interval < 1 ? (interval*60) + ' phút' : interval + 'h') : 'Đã tắt Smart Sync');
+    } catch (err) {
         toastError(err.message);
     }
 }

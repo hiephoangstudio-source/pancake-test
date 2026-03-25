@@ -256,7 +256,7 @@ export async function render8Charts(trendData, topCampData, staffData, tagMap, r
 
     // Row 3: Top10, Ads Funnel, Page Spend
     renderChart5_TopCampaigns(topCampData);
-    renderAdsFunnel(channels || []);
+    renderCustomersPerPage(reqData);
     renderPageSpend(channels || []);
 }
 
@@ -412,7 +412,7 @@ function renderChart5_TopCampaigns(topCampData) {
     if (!row.querySelector('#chart-top-campaigns')) {
         row.innerHTML = ''
             + '<div class="chart-card"><div class="chart-title"><i data-lucide="award"></i> Top 10 Chiến dịch</div><div style="height:260px"><canvas id="chart-top-campaigns"></canvas></div></div>'
-            + '<div class="chart-card"><div class="chart-title"><i data-lucide="megaphone"></i> Phễu quảng cáo</div><div id="ads-funnel" style="height:260px;overflow-y:auto;padding:8px 0"></div></div>'
+            + '<div class="chart-card"><div class="chart-title"><i data-lucide="users"></i> SỐ LƯỢNG KHÁCH HÀNG theo trang</div><div style="height:260px"><canvas id="chart-customers-per-page"></canvas></div></div>'
             + '<div class="chart-card"><div class="chart-title"><i data-lucide="bar-chart-3"></i> So sánh Pages (chi phí)</div><div style="height:260px"><canvas id="page-spend-chart"></canvas></div></div>';
         if (window.lucide) window.lucide.createIcons();
     }
@@ -420,7 +420,7 @@ function renderChart5_TopCampaigns(topCampData) {
     const ctx = document.getElementById('chart-top-campaigns')?.getContext('2d');
     if (!ctx || !topCampData || !topCampData.length) return;
     
-    const sorted = [...topCampData].sort((a, b) => (b.conversations || 0) - (a.conversations || 0)).slice(0, 10);
+    const sorted = [...topCampData].sort((a, b) => (b.spend || 0) - (a.spend || 0)).slice(0, 10);
     if (sorted.length === 0) return;
     
     charts.c5 = new Chart(ctx, {
@@ -428,9 +428,9 @@ function renderChart5_TopCampaigns(topCampData) {
         data: {
             labels: sorted.map(d => d.name.length > 25 ? d.name.substring(0,25)+'...' : d.name),
             datasets: [{
-                label: 'Hội thoại',
-                data: sorted.map(d => d.conversations || 0),
-                backgroundColor: '#3B82F6',
+                label: 'Chi phí',
+                data: sorted.map(d => d.spend || 0),
+                backgroundColor: '#F59E0B',
                 borderRadius: 4
             }]
         },
@@ -508,37 +508,33 @@ async function renderChart7_Branch(staffData, reqData, tagMap) {
     } catch { /* ignore */ }
 }
 
-// ─── Ads Funnel (from channels data) ───
-function renderAdsFunnel(channels) {
-    var funnelEl = document.getElementById('ads-funnel');
-    if (!funnelEl) return;
-    var totalSpend = 0, totalImpr = 0, totalClicks = 0, totalConv = 0, totalPhones = 0;
-    for (var i = 0; i < channels.length; i++) {
-        totalSpend += Number(channels[i].spend || 0);
-        totalImpr += Number(channels[i].impressions || 0);
-        totalClicks += Number(channels[i].clicks || 0);
-        totalConv += Number(channels[i].conversations || 0);
-        totalPhones += Number(channels[i].phones || 0);
-    }
-    var steps = [
-        { label: 'Hiển thị', value: totalImpr, color: '#8B5CF6' },
-        { label: 'Click', value: totalClicks, color: 'var(--orange)' },
-        { label: 'Hội thoại', value: totalConv, color: 'var(--blue)' },
-        { label: 'Có SĐT', value: totalPhones, color: 'var(--green)' },
-    ];
-    var maxVal = Math.max(totalImpr, 1);
-    var html = '<div class="funnel">';
-    for (var i = 0; i < steps.length; i++) {
-        var s = steps[i];
-        var pct = Math.max((s.value / maxVal * 100), 3);
-        var rateTxt = i > 0 && totalImpr > 0 ? fmtPercent(s.value / totalImpr * 100) : '';
-        html += '<div class="funnel-step">';
-        html += '<div class="funnel-label">' + s.label + '</div>';
-        html += '<div class="funnel-bar-wrapper"><div class="funnel-bar" style="width:' + pct + '%;background:' + s.color + '">' + fmtNumber(s.value) + '</div></div>';
-        html += '<div class="funnel-count">' + rateTxt + '</div></div>';
-    }
-    html += '</div>';
-    funnelEl.innerHTML = html;
+// ─── Customers per Page Chart (from daily_reports) ───
+function renderCustomersPerPage(reqData) {
+    var ctx = document.getElementById('chart-customers-per-page')?.getContext('2d');
+    if (!ctx) return;
+    
+    apiGet(`/dashboard/customers-per-page?from=${reqData.from}&to=${reqData.to}`)
+        .then(data => {
+            if (!data || !data.length) return;
+            const colors = ['#3B82F6','#8B5CF6','#10B981','#F59E0B','#EF4444','#EC4899','#6366F1','#14B8A6','#F97316','#84CC16'];
+            charts.cCustomersPage = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => d.name),
+                    datasets: [{ label: 'Khách hàng', data: data.map(d => d.customers), backgroundColor: colors, borderRadius: 4 }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, datalabels: { anchor: 'end', align: 'end', font: { size: 9, weight: '600' }, color: '#1E293B', formatter: v => v > 0 ? fmtTick(v) : '' } },
+                    scales: {
+                        x: { grid: { color: 'rgba(148,163,184,0.1)' }, ticks: { font: { size: 10 }, callback: fmtTick } },
+                        y: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#1E293B' } }
+                    }
+                }
+            });
+        })
+        .catch(err => console.error('Customers per page error:', err));
 }
 
 // ─── Page Spend Chart (from channels data) ───

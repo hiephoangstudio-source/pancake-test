@@ -429,6 +429,32 @@ router.get('/daily', async (req, res) => {
 });
 
 /**
+ * GET /api/dashboard/customers-per-page
+ * Returns customer/conversation counts grouped by page from daily_reports
+ */
+router.get('/customers-per-page', async (req, res) => {
+    try {
+        const from = req.query.from || '2025-01-01';
+        const to = req.query.to || new Date().toISOString().split('T')[0];
+        
+        const sql = `
+            SELECT COALESCE(p.name, dr.page_id) AS name,
+                   SUM(dr.unique_customers)::int AS customers,
+                   SUM(dr.conversations)::int AS conversations
+            FROM daily_reports dr
+            LEFT JOIN pages p ON p.page_id = dr.page_id
+            WHERE dr.date >= $1 AND dr.date <= $2
+            GROUP BY COALESCE(p.name, dr.page_id)
+            ORDER BY customers DESC
+        `;
+        const { rows } = await query(sql, [from, to]);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
  * GET /api/dashboard/customers
  * Server-side pagination, search, and lifecycle segmentation.
  * Query: ?pageId=x&search=x&page=1&limit=50&segment=active

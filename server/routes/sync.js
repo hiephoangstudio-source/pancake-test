@@ -72,9 +72,20 @@ router.post('/page', async (req, res) => {
 router.post('/all', async (req, res) => {
     try {
         const { days_back = 30 } = req.body;
-        const results = await syncAllPages(days_back);
-        clearCache('dash');
-        res.json(results);
+        // Respond immediately, run sync in background to avoid timeout
+        res.json({ status: 'started', message: `Syncing ${days_back} days in background...` });
+        
+        // Run sync async
+        syncAllPages(days_back)
+            .then(() => {
+                clearCache('dash');
+                broadcastSSE('sync_complete', { success: true, days_back });
+                console.log(`[Sync] All pages synced (${days_back} days)`);
+            })
+            .catch(err => {
+                broadcastSSE('sync_error', { error: err.message });
+                console.error('[Sync] Error:', err.message);
+            });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -205,5 +216,70 @@ router.patch('/refresh-tags', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+// ── Auto-Sync Scheduler ──────────────────
+let autoSyncTimer = null;
+let autoSyncConfig = { interval_hours: 0, last_sync: null };
+
+async function loadAutoSyncConfig() {
+    try {
+        const { rows } = await query("SELECT value FROM settings WHERE key = 'auto_sync'");
+        if (rows.length > 0) {
+            autoSyncConfig = JSON.parse(rows[0].value);
+            if (autoSyncConfig.interval_hours > 0) startAutoSync(autoSyncConfig.interval_hours);
+        }
+    } catch { /* settings table may not exist yet */ }
+}
+
+function startAutoSync(hours) {
+    if (autoSyncTimer) clearInterval(autoSyncTimer);
+    if (hours <= 0) { autoSyncTimer = null; return; }
+    const ms = hours * 3600 * 1000;
+    autoSyncTimer = setInterval(async () => {
+        try {
+            console.log(`[Auto-Sync] Running scheduled sync (${hours}h interval)...`);
+            await syncAllPages(7);
+            autoSyncConfig.last_sync = new Date().toISOString();
+            await query("INSERT INTO settings (key, value) VALUES ('auto_sync', $1) ON CONFLICT (key) DO UPDATE SET value = $1",
+                [JSON.stringify(autoSyncConfig)]);
+            clearCache();
+            console.log('[Auto-Sync] Completed');
+        } catch (err) {
+            console.error('[Auto-Sync] Error:', err.message);
+        }
+    }, ms);
+    console.log(`[Auto-Sync] Scheduled every ${hours}h`);
+}
+
+/**
+ * GET /api/sync/auto-sync — Get auto-sync config
+ */
+router.get('/auto-sync', (req, res) => {
+    res.json(autoSyncConfig);
+});
+
+/**
+ * POST /api/sync/auto-sync — Save auto-sync config
+ * Body: { interval_hours: 0|6|12|24 }
+ */
+router.post('/auto-sync', async (req, res) => {
+    try {
+        const { interval_hours = 0 } = req.body;
+        autoSyncConfig.interval_hours = parseInt(interval_hours);
+        
+        // Ensure settings table exists
+        await query(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
+        await query("INSERT INTO settings (key, value) VALUES ('auto_sync', $1) ON CONFLICT (key) DO UPDATE SET value = $1",
+            [JSON.stringify(autoSyncConfig)]);
+        
+        startAutoSync(autoSyncConfig.interval_hours);
+        res.json({ success: true, ...autoSyncConfig });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Initialize auto-sync on server start
+setTimeout(loadAutoSyncConfig, 5000);
 
 export default router;
