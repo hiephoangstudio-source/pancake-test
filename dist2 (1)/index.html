@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2H Studio — Bảng điều khiển</title>
+    <meta name="description" content="Dashboard phân tích marketing, quản lý chi nhánh và hiệu quả quảng cáo" />
+    <meta property="og:title" content="2H Studio Dashboard" />
+    <meta property="og:description" content="Phân tích marketing & quản lý chi nhánh" />
+    <meta property="og:url" content="https://pancake.2hstudio.vn/" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+  <script type="module" crossorigin src="/assets/index-C6vEoKGd.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-DgLaZb3A.css">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar"></aside>
+        <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+        <!-- Main -->
+        <main class="app-main">
+            <header class="app-header" id="app-header">
+                <div class="header-left">
+                    <button class="menu-toggle" id="sidebar-toggle" title="Ẩn/Hiện menu">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+                    </button>
+                    <span class="header-title" id="header-title">Tổng quan</span>
+                </div>
+                <div class="header-filters" id="header-filters"></div>
+            </header>
+            <div class="app-content" id="app-content">
+                <div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-muted)">
+                    <i data-lucide="loader-2" style="width:24px;height:24px;animation:spin 1s linear infinite"></i>
+                    <span style="margin-left:8px">Đang tải...</span>
+                </div>
+            </div>
+        </main>
+    </div>
+
+</body>
+</html>

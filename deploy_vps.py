@@ -10,12 +10,12 @@ VPS_IP = "163.223.13.238"
 VPS_USER = "root"
 VPS_PASSWORD = "*v%-uo2W"
 VPS_PORT = 8686
-DOMAIN = "v2.pancake.2hstudio.vn"
+DOMAIN = "pancake.2hstudio.vn"
 DB_NAME = "studio2h"
 DB_USER = "studio2h"
 DB_PASS = "Studio2h@2026!"
-APP_DIR = "/var/www/pancake-2hstudio-api"
-FRONTEND_DIR = "/var/www/pancake-2hstudio-frontend"
+APP_DIR = "/var/www/2hstudio-api"
+FRONTEND_DIR = "/var/www/2hstudio-frontend"
 
 def get_client():
     client = paramiko.SSHClient()
@@ -113,7 +113,7 @@ def deploy_backend(client, db_url):
     # Create .env file on server
     env_content = f"""# 2H Studio Dashboard — Server Environment
 DATABASE_URL={db_url}
-API_PORT=3002
+API_PORT=3001
 JWT_SECRET=2hstudio-jwt-secret-{int(time.time())}
 NODE_ENV=production
 """
@@ -139,14 +139,14 @@ NODE_ENV=production
     
     # Start/restart with PM2
     print("Starting backend with PM2...")
-    run(client, "pm2 delete pancake-2hstudio-api 2>/dev/null || true", show=False)
-    out, err, code = run(client, f"cd {APP_DIR} && pm2 start index.js --name pancake-2hstudio-api")
+    run(client, "pm2 delete 2hstudio-api 2>/dev/null || true", show=False)
+    out, err, code = run(client, f"cd {APP_DIR} && pm2 start index.js --name 2hstudio-api")
     run(client, "pm2 save", show=False)
     print("✅ Backend started with PM2")
     
     # Verify backend is running
     time.sleep(3)
-    out, _, _ = run(client, "curl -s http://localhost:3002/api/health 2>&1")
+    out, _, _ = run(client, "curl -s http://localhost:3001/api/health 2>&1")
     print(f"Health: {out}")
     
     return True
@@ -161,15 +161,15 @@ def setup_nginx(client):
     run(client, f"mkdir -p {FRONTEND_DIR}", show=False)
     
     nginx_config = """server {
-    listen 8080;
-    server_name _;
+    listen 80;
+    server_name """ + DOMAIN + """;
 
     root """ + FRONTEND_DIR + """;
     index index.html;
 
     # API proxy
     location /api {
-        proxy_pass http://127.0.0.1:3002;
+        proxy_pass http://127.0.0.1:3001;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -201,20 +201,31 @@ def setup_nginx(client):
 """
     
     # Write nginx config using heredoc
-    run(client, f"cat > /etc/nginx/sites-available/pancake-test << 'NGINXEOF'\n{nginx_config}NGINXEOF")
+    run(client, f"cat > /etc/nginx/sites-available/{DOMAIN} << 'NGINXEOF'\n{nginx_config}NGINXEOF")
     
     # Enable site
-    run(client, f"ln -sf /etc/nginx/sites-available/pancake-test /etc/nginx/sites-enabled/pancake-test")
+    run(client, f"ln -sf /etc/nginx/sites-available/{DOMAIN} /etc/nginx/sites-enabled/{DOMAIN}")
+    run(client, "rm -f /etc/nginx/sites-enabled/default")
     
     # Test and reload
     out, err, code = run(client, "nginx -t 2>&1")
     combined = out + " " + err
     if "successful" in combined.lower() or code == 0:
         run(client, "systemctl reload nginx")
-        print("✅ Nginx configured and reloaded on PORT 8080")
+        print("✅ Nginx configured and reloaded")
     else:
         print(f"❌ Nginx config error: {combined}")
         return False
+    
+    # Setup SSL with certbot
+    print("Setting up SSL certificate...")
+    out, err, code = run(client, f"certbot --nginx -d {DOMAIN} --non-interactive --agree-tos --email admin@2hstudio.vn --redirect 2>&1")
+    combined = out + " " + err
+    if code == 0 or "successfully" in combined.lower():
+        print("✅ SSL certificate installed")
+    else:
+        print(f"⚠️ SSL result: {combined[:300]}")
+        print("(DNS must point to this IP for SSL to work)")
     
     return True
 
@@ -224,9 +235,9 @@ def deploy_frontend(client):
     print("📦 Uploading frontend build...")
     print("="*50)
     
-    dist_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dist2')
+    dist_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dist')
     if not os.path.isdir(dist_dir):
-        print("❌ dist2/ directory not found. Run 'npm run build' first!")
+        print("❌ dist/ directory not found. Run 'npm run build' first!")
         return False
     
     run(client, f"mkdir -p {FRONTEND_DIR}")

@@ -1,0 +1,198 @@
+{
+    "success": true,
+    "users": [
+        {
+            "id": "f6bc9274-f0b2-40df-9a78-7592385655c7",
+            "name": "H\u1eb1ng Min",
+            "status": "available",
+            "fb_id": "477315879143247",
+            "page_permissions": {
+                "permissions": [
+                    0,
+                    10,
+                    20,
+                    30,
+                    40,
+                    50,
+                    60,
+                    70,
+                    71,
+                    80,
+                    81,
+                    90,
+                    100
+                ]
+            },
+            "role_in_page": "EDIT_PROFILE",
+            "status_round_robin": "available",
+            "status_in_page": "active",
+            "is_online": false
+        },
+        {
+            "id": "702fc984-50f9-4d0b-89ac-6dbd58ea9025",
+            "name": "Thu H\u00e0",
+            "status": "available",
+            "fb_id": "1101877299874310",
+            "page_permissions": {
+                "permissions": [
+                    0,
+                    10,
+                    20,
+                    30,
+                    40,
+                    50,
+                    60,
+                    70,
+                    71,
+                    80,
+                    81,
+                    90,
+                    100
+                ]
+            },
+            "role_in_page": "EDIT_PROFILE",
+            "status_round_robin": "available",
+            "status_in_page": "active",
+            "is_online": false
+        },
+        {
+            "id": "80766c05-beba-4b95-989b-fbbdd7a6f37f",
+            "name": "Nguy\u1ec5n",
+            "status": "available",
+            "fb_id": "112104415946981",
+            "page_permissions": {
+                "permissions": [
+                    0,
+                    10,
+                    20,
+                    30,
+                    40,
+                    50,
+                    60,
+                    70,
+                    71,
+                    80,
+                    81,
+                    90,
+                    100
+                ]
+            },
+            "role_in_page": "EDIT_PROFILE",
+            "status_round_robin": "available",
+            "status_in_page": "active",
+            "is_online": false
+        },
+        {
+            "id": "1d926afc-f213-479a-8a62-6b0662dcdca0",
+            "name": "Ph\u1ea1m Lan",
+            "status": "available",
+            "fb_id": "109460309526864",
+            "page_permissions": {
+                "permissions": [
+                    0,
+                    10,
+                    20,
+                    30,
+                    50,
+                    60,
+                    70,
+                    71,
+                    80,
+                    81,
+                    90,
+                    100
+                ]
+            },
+            "role_in_page": "ADMINISTER",
+            "status_round_robin": "available",
+            "status_in_page": "active",
+            "is_online": false
+        },
+        {
+            "id": "88d0dfb4-b10d-4e91-b834-c4cfb5e474c0",
+            "name": "Hien Nguyen",
+            "status": "available",
+            "fb_id": "1302312056457916",
+            "page_permissions": {
+                "permissions": [
+                    80,
+                    81,
+                    60,
+                    70,
+                    71,
+                    10,
+                    20,
+                    30,
+                    90,
+                    100,
+                    40
+                ]
+            },
+            "role_in_page": "ADMINISTER",
+            "status_round_robin": "available",
+            "status_in_page": "active",
+            "is_online": false
+        },
+        {
+            "id": "1836a1d9-827f-48e1-832f-a0b61b7b177f",
+            "name": "QC Quang T\u00e2n",
+            "status": "available",
+            "fb_id": "122214800558221944",
+            "page_permissions": null,
+            "role_in_page": "ADMINISTER",
+            "status_round_robin": "available",
+            "status_in_page": "active",
+            "is_online": false
+        },
+        {
+            "id": "f9f367eb-25a0-4a03-b40f-e8bb5418a8a7",
+            "name": "Hi\u1ec7p Ho\u00e0ng",
+            "status": "available",
+            "fb_id": "703323106482004",
+            "page_permissions": {
+                "permissions": [
+                    80,
+                    81,
+                    60,
+                    70,
+                    71,
+                    10,
+                    20,
+                    30,
+                    90,
+                    100,
+                    40,
+                    91
+                ]
+            },
+            "role_in_page": "EDIT_PROFILE",
+            "status_round_robin": "available",
+            "status_in_page": "active",
+            "is_online": false
+        },
+        {
+            "id": "e32c1f7f-b58a-4fe1-9d30-28c294aa3152",
+            "name": "Mary Kim-Bridal",
+            "status": "available",
+            "fb_id": "179227300968905",
+            "page_permissions": null,
+            "role_in_page": "ADMINISTER",
+            "status_round_robin": null,
+            "status_in_page": "active",
+            "is_online": false
+        }
+    ],
+    "round_robin_users": {
+        "comment": [
+            "702fc984-50f9-4d0b-89ac-6dbd58ea9025",
+            "80766c05-beba-4b95-989b-fbbdd7a6f37f",
+            "f6bc9274-f0b2-40df-9a78-7592385655c7"
+        ],
+        "inbox": [
+            "702fc984-50f9-4d0b-89ac-6dbd58ea9025",
+            "80766c05-beba-4b95-989b-fbbdd7a6f37f",
+            "f6bc9274-f0b2-40df-9a78-7592385655c7"
+        ]
+    },
+    "disabled_users": []
+}

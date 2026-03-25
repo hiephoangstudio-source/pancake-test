@@ -1,0 +1,44 @@
+{
+  "total_conversations": 2249,
+  "by_type": {
+    "INBOX": 1697,
+    "COMMENT": 552
+  },
+  "by_tag": {
+    "HÀ": 502,
+    "Hằng": 530,
+    "CHỤP GIA ĐÌNH": 155,
+    "Oanh": 556,
+    "CHỤP BEAUTY": 141,
+    "SAI ĐỐI TƯỢNG": 482,
+    "KH HẸN ĐẾN": 24,
+    "CHỤP STUDIO": 143,
+    "KH THAM KHẢO": 22,
+    "CHỤP COUPLE": 49,
+    "KH KÝ ONLINE": 52,
+    "THUÊ VÁY": 15,
+    "HOÀNG CẦU": 37,
+    "KH KÍ OFFLINE": 73,
+    "Linh": 42,
+    "KH HẸN ĐÃ ĐẾN": 8,
+    "CHỤP THỜI TRANG": 19,
+    "CHỤP BABY": 41,
+    "Thuý": 28,
+    "LONG BIÊN": 8,
+    "KH MẤT": 33,
+    "NINH HIỆP": 1,
+    "khách cũ": 1,
+    "KH CHỌN GIÁ RẺ": 2
+  },
+  "by_assignee": {
+    "Thu Hà": 885,
+    "Hằng Min": 642,
+    "Nguyễn": 714
+  },
+  "total_messages": 43048,
+  "with_phone": 84,
+  "seen_count": 2248,
+  "unseen_count": 1,
+  "ads_linked": 1263,
+  "unique_customers": 1862
+}
