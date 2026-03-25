@@ -45,18 +45,43 @@ router.get('/kpis', async (req, res) => {
     `;
         const { rows: tagRows } = await query(tagsSQL, params);
         let extraSigned = 0;
+        let kyOnline = 0, kyOffline = 0, henDen = 0, lost = 0;
         for (const r of tagRows) {
             try {
                 const tags = JSON.parse(r.tags_breakdown);
                 for (const [tag, count] of Object.entries(tags)) {
                     const t = tag.toLowerCase();
+                    const c = Number(count) || 0;
                     if (['ký', 'kí', 'cọc', 'chốt'].some(k => t.includes(k))) {
-                        extraSigned += Number(count) || 0;
+                        extraSigned += c;
+                        if (t.includes('online')) kyOnline += c;
+                        else if (t.includes('offline') || t.includes('trực tiếp') || t.includes('tại')) kyOffline += c;
                     }
+                    if (['hẹn đến', 'đã đến', 'đến stud'].some(k => t.includes(k))) henDen += c;
+                    if (['mất', 'hủy', 'không nghe', 'không gọi được', 'sai'].some(k => t.includes(k))) lost += c;
                 }
             } catch { /* ignore */ }
         }
         current.signed = Number(current.signed) + extraSigned;
+        current.kyOnline = kyOnline;
+        current.kyOffline = kyOffline;
+        current.henDen = henDen;
+        current.lost = lost;
+
+        // Ads data
+        const sqlAds = `
+            SELECT 
+                SUM(spend)::int AS spend,
+                COUNT(*) FILTER (WHERE status = 'ACTIVE') AS ads_running,
+                COUNT(*) FILTER (WHERE status = 'PAUSED') AS ads_paused
+            FROM channels
+            WHERE name IS NOT NULL AND name != '' ${pageFilter.replace('$3', '$1')}
+        `;
+        const adsParams = pageId ? [pageId] : [];
+        const { rows: [ads] } = await query(sqlAds, adsParams);
+        current.spend = Number(ads.spend || 0);
+        current.adsRunning = Number(ads.ads_running || 0);
+        current.adsPaused = Number(ads.ads_paused || 0);
 
         // Convert string numbers to actual numbers
         for (const key of Object.keys(current)) {
@@ -70,18 +95,29 @@ router.get('/kpis', async (req, res) => {
             const { rows: [prevRow] } = await query(sql, prevParams);
             const { rows: prevTagRows } = await query(tagsSQL, prevParams);
             let prevExtraSigned = 0;
+            let pKyOnline = 0, pKyOffline = 0, pHenDen = 0, pLost = 0;
             for (const r of prevTagRows) {
                 try {
                     const tags = JSON.parse(r.tags_breakdown);
                     for (const [tag, count] of Object.entries(tags)) {
                         const t = tag.toLowerCase();
+                        const c = Number(count) || 0;
                         if (['ký', 'kí', 'cọc', 'chốt'].some(k => t.includes(k))) {
-                            prevExtraSigned += Number(count) || 0;
+                            prevExtraSigned += c;
+                            if (t.includes('online')) pKyOnline += c;
+                            else if (t.includes('offline') || t.includes('trực tiếp') || t.includes('tại')) pKyOffline += c;
                         }
+                        if (['hẹn đến', 'đã đến', 'đến stud'].some(k => t.includes(k))) pHenDen += c;
+                        if (['mất', 'hủy', 'không nghe', 'không gọi được', 'sai'].some(k => t.includes(k))) pLost += c;
                     }
                 } catch { /* ignore */ }
             }
             prevRow.signed = Number(prevRow.signed) + prevExtraSigned;
+            prevRow.kyOnline = pKyOnline;
+            prevRow.kyOffline = pKyOffline;
+            prevRow.henDen = pHenDen;
+            prevRow.lost = pLost;
+
             for (const key of Object.keys(prevRow)) {
                 prevRow[key] = Number(prevRow[key]);
             }
@@ -129,7 +165,10 @@ router.get('/trend', async (req, res) => {
         ${dateExpr} AS key,
         ${labelExpr} AS label,
         COALESCE(SUM(conversations), 0)::int AS conversations,
-        COALESCE(SUM(total_messages), 0)::int AS messages
+        COALESCE(SUM(total_messages), 0)::int AS messages,
+        COALESCE(SUM(signed), 0)::int AS signed,
+        COALESCE(SUM(wrong_target), 0)::int AS "wrongTarget",
+        COALESCE(SUM(ads_linked), 0)::int AS spend
       FROM daily_reports
       WHERE date >= $1 AND date <= $2 ${pageFilter}
       GROUP BY key, label
@@ -138,10 +177,76 @@ router.get('/trend', async (req, res) => {
     `;
 
         const { rows } = await query(sql, params);
+        
+        // Post-process to add extra signed from tags_breakdown (just like in kpis)
+        for (let row of rows) {
+            const dateStr = row.key;
+            // Additional query to grab tags for this specific date
+            const tagsSQL = `
+              SELECT tags_breakdown FROM daily_reports 
+              WHERE ${dateExpr.replace('date::date', 'date')} = $1 ${pageFilter.replace('$3', '$2')}
+                AND tags_breakdown IS NOT NULL AND tags_breakdown != '{}'
+            `;
+            const tParams = pageId ? [dateStr, pageId] : [dateStr];
+            try {
+                const { rows: tRows } = await query(tagsSQL, tParams);
+                let extraSigned = 0;
+                for (const r of tRows) {
+                    const tags = JSON.parse(r.tags_breakdown);
+                    for (const [tag, count] of Object.entries(tags)) {
+                        const t = tag.toLowerCase();
+                        if (['ký', 'kí', 'cọc', 'chốt'].some(k => t.includes(k))) {
+                            extraSigned += Number(count) || 0;
+                        }
+                    }
+                }
+                row.signed += extraSigned;
+            } catch (e) {
+                // ignore
+            }
+        }
+        
         setCache(cacheKey, rows);
         res.json(rows);
     } catch (err) {
         console.error('Trend error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /api/dashboard/top-campaigns
+ */
+router.get('/top-campaigns', async (req, res) => {
+    try {
+        const { from, to, pageId } = req.query;
+        if (!from || !to) return res.status(400).json({ error: 'from and to required' });
+
+        const cacheKey = `dash_top_campaigns_${pageId || 'all'}`;
+        const cached = getCached(cacheKey);
+        if (cached) return res.json(cached);
+
+        const pageFilter = pageId ? 'AND page_id = $1' : '';
+        const params = pageId ? [pageId] : [];
+
+        // channels table does not have date, it's cumulative over the 30 day sync
+        const sql = `
+            SELECT
+                name,
+                SUM(spend)::int AS spend,
+                SUM(conversations)::int AS conversations,
+                SUM(COALESCE(phones, 0))::int AS phone
+            FROM channels
+            WHERE name IS NOT NULL AND name != '' ${pageFilter}
+            GROUP BY name
+            ORDER BY SUM(conversations) DESC
+            LIMIT 10
+        `;
+        const { rows } = await query(sql, params);
+        setCache(cacheKey, rows, 120_000);
+        res.json(rows);
+    } catch (err) {
+        console.error('Top campaigns error:', err);
         res.status(500).json({ error: err.message });
     }
 });

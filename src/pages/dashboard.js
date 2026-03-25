@@ -85,13 +85,16 @@ export async function render(container, { tagMap }) {
     // Layout skeleton
     container.innerHTML = `
         <div class="kpi-grid" id="kpi-container">
-            ${Array(8).fill('<div class="kpi-card"><div class="skeleton" style="height:14px;width:60px;margin-bottom:8px"></div><div class="skeleton" style="height:28px;width:80px"></div></div>').join('')}
+            ${Array(14).fill('<div class="kpi-card"><div class="skeleton" style="height:14px;width:60px;margin-bottom:8px"></div><div class="skeleton" style="height:28px;width:80px"></div></div>').join('')}
         </div>
         <div class="chart-grid chart-grid-3" style="margin-top:12px" id="charts-row-1">
             ${Array(3).fill('<div class="chart-card"><div class="skeleton" style="height:260px"></div></div>').join('')}
         </div>
         <div class="chart-grid chart-grid-2" style="margin-top:12px" id="charts-row-2">
             ${Array(2).fill('<div class="chart-card"><div class="skeleton" style="height:260px"></div></div>').join('')}
+        </div>
+        <div class="chart-grid chart-grid-3" style="margin-top:12px" id="charts-row-3">
+            ${Array(3).fill('<div class="chart-card"><div class="skeleton" style="height:260px"></div></div>').join('')}
         </div>
         <!-- Row 3: Staff Performance Table -->
         <div class="card" style="margin-top:16px">
@@ -152,20 +155,23 @@ async function fetchAndRender(container, tagMap) {
         const kpis = await apiGet(kpiUrl);
         renderKpis(kpis);
 
-        // Fetch trend
+        // Fetch trend (now includes signed, wrongTarget, spend)
         let trendUrl = `/dashboard/trend?from=${from}&to=${to}`;
         if (pageId) trendUrl += `&pageId=${pageId}`;
         const trendData = await apiGet(trendUrl);
-        renderTrendChart(trendData);
+
+        // Fetch top-campaigns
+        let topCampUrl = `/dashboard/top-campaigns?from=${from}&to=${to}`;
+        if (pageId) topCampUrl += `&pageId=${pageId}`;
+        const topCampData = await apiGet(topCampUrl);
 
         // Fetch staff
         let staffUrl = `/dashboard/staff?from=${from}&to=${to}`;
         if (pageId) staffUrl += `&pageId=${pageId}`;
         const staffData = await apiGet(staffUrl);
-        renderStaffChart(staffData);
 
-        // Render branch comparison + funnel
-        await renderBranchComparison(staffData, tagMap);
+        // Render 8 Charts Layout
+        render8Charts(trendData, topCampData, staffData, tagMap, { from, to, preset });
 
         // ─── Fetch customers with tag filters ───
         const tagFilters = [branchFilter, staffFilter, statusFilter, serviceFilter].filter(Boolean);
@@ -199,16 +205,23 @@ function renderKpis(data) {
     const p = data.prev;
     const phoneRate = c.conversations > 0 ? (c.phone / c.conversations * 100) : 0;
     const signedRate = c.conversations > 0 ? (c.signed / c.conversations * 100) : 0;
+    const costPerInbox = c.inbox > 0 ? (c.spend / c.inbox) : 0;
 
     const cards = [
-        renderKpiCard({ label: 'Hội thoại', value: fmtNumber(c.conversations), icon: 'message-circle', color: 'var(--blue)', delta: p ? calcDelta(c.conversations, p.conversations) : null }),
-        renderKpiCard({ label: 'Tin nhắn', value: fmtNumber(c.messages), icon: 'mail', color: '#8B5CF6', delta: p ? calcDelta(c.messages, p.messages) : null }),
-        renderKpiCard({ label: 'Khách hàng', value: fmtNumber(c.customers), icon: 'users', color: 'var(--green)', delta: p ? calcDelta(c.customers, p.customers) : null }),
-        renderKpiCard({ label: 'Có SĐT', value: fmtNumber(c.phone), icon: 'phone', color: 'var(--orange)', delta: p ? calcDelta(c.phone, p.phone) : null }),
-        renderKpiCard({ label: 'Chi QC', value: fmtMoney(c.adsLinked || 0), icon: 'wallet', color: 'var(--blue)', delta: null }),
+        renderKpiCard({ label: 'HỘI THOẠI', value: fmtNumber(c.conversations), icon: 'message-circle', color: 'var(--blue)', delta: p ? calcDelta(c.conversations, p.conversations) : null }),
+        renderKpiCard({ label: 'KHÁCH HÀNG', value: fmtNumber(c.customers), icon: 'users', color: 'var(--green)', delta: p ? calcDelta(c.customers, p.customers) : null }),
+        renderKpiCard({ label: 'SỐ LƯỢNG SĐT', value: fmtNumber(c.phone), icon: 'phone', color: 'var(--orange)', delta: p ? calcDelta(c.phone, p.phone) : null }),
         renderKpiCard({ label: 'Tỷ lệ SĐT', value: fmtPercent(phoneRate), icon: 'percent', color: 'var(--cyan)', delta: p && p.conversations > 0 ? calcDelta(phoneRate, p.phone / p.conversations * 100) : null }),
         renderKpiCard({ label: 'Đã chốt', value: fmtNumber(c.signed), icon: 'check-circle', color: 'var(--green)', delta: p ? calcDelta(c.signed, p.signed) : null }),
         renderKpiCard({ label: 'Tỷ lệ chốt', value: fmtPercent(signedRate), icon: 'target', color: '#10B981', delta: null }),
+        renderKpiCard({ label: 'Ký online', value: fmtNumber(c.kyOnline || 0), icon: 'wifi', color: '#6366F1', delta: p ? calcDelta(c.kyOnline || 0, p.kyOnline || 0) : null }),
+        renderKpiCard({ label: 'Ký offline', value: fmtNumber(c.kyOffline || 0), icon: 'store', color: '#8B5CF6', delta: p ? calcDelta(c.kyOffline || 0, p.kyOffline || 0) : null }),
+        renderKpiCard({ label: 'Hẹn đến', value: fmtNumber(c.henDen || 0), icon: 'calendar', color: '#F59E0B', delta: p ? calcDelta(c.henDen || 0, p.henDen || 0) : null }),
+        renderKpiCard({ label: 'Mất', value: fmtNumber(c.lost || 0), icon: 'user-x', color: '#EF4444', delta: p ? calcDelta(c.lost || 0, p.lost || 0) : null }),
+        renderKpiCard({ label: 'Chi phí MKT', value: fmtMoney(c.spend || 0), icon: 'wallet', color: 'var(--blue)', delta: null }),
+        renderKpiCard({ label: 'Chi phí / Inbox', value: fmtMoney(costPerInbox), icon: 'coins', color: '#D946EF', delta: null }),
+        renderKpiCard({ label: 'Đang chạy', value: fmtNumber(c.adsRunning || 0), icon: 'play-circle', color: '#10B981', delta: null }),
+        renderKpiCard({ label: 'Tạm dừng', value: fmtNumber(c.adsPaused || 0), icon: 'pause-circle', color: '#94A3B8', delta: null }),
     ];
 
     const el = document.getElementById('kpi-container');
@@ -216,88 +229,246 @@ function renderKpis(data) {
     if (window.lucide) window.lucide.createIcons();
 }
 
-function renderTrendChart(data) {
+export function render8Charts(trendData, topCampData, staffData, tagMap, reqData) {
+    if (window.lucide) window.lucide.createIcons();
+    
+    // Destroy old charts to prevent memory leaks and overlapping renders
+    Object.values(charts).forEach(c => c && c.destroy && c.destroy());
+    
+    // R1
+    renderChart1_Conversations(trendData);
+    renderChart2_Revenue(trendData);
+    
+    // R2
+    renderChart3_Marketing(trendData);
+    renderChart4_WrongTarget(trendData);
+    renderChart5_TopCampaigns(topCampData);
+    
+    // R3
+    renderChart6_MessageStatus(staffData);
+    renderChart7_Branch(staffData, reqData, tagMap);
+    renderChart8_Funnel(staffData);
+}
+
+function renderChart1_Conversations(data) {
     const row = document.getElementById('charts-row-1');
     if (!row) return;
-
-    row.innerHTML = `
-        <div class="chart-card">
-            <div class="chart-title"><i data-lucide="trending-up"></i> Xu hướng hội thoại</div>
-            <div style="height:260px"><canvas id="trend-chart"></canvas></div>
-        </div>
-        <div class="chart-card">
-            <div class="chart-title"><i data-lucide="pie-chart"></i> Phân bố tin nhắn</div>
-            <div style="height:260px"><canvas id="type-chart"></canvas></div>
-        </div>
-        <div class="chart-card">
-            <div class="chart-title"><i data-lucide="user-check"></i> Top nhân viên</div>
-            <div style="height:260px" id="top-staff-list"></div>
-        </div>
-    `;
-    if (window.lucide) window.lucide.createIcons();
-
-    const ctx = document.getElementById('trend-chart')?.getContext('2d');
-    if (!ctx || !data.length) return;
-
-    if (charts.trend) charts.trend.destroy();
-    charts.trend = new Chart(ctx, {
-        type: 'line',
+    if (!row.querySelector('#chart-conversations')) {
+        row.innerHTML = `
+            <div class="chart-card">
+                <div class="chart-title"><i data-lucide="message-circle" class="text-blue-500"></i> Xu hướng hội thoại</div>
+                <div style="height:260px"><canvas id="chart-conversations"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title"><i data-lucide="dollar-sign" class="text-green-500"></i> Xu hướng Đơn chốt</div>
+                <div style="height:260px"><canvas id="chart-revenue"></canvas></div>
+            </div>
+        `;
+        if (window.lucide) window.lucide.createIcons();
+    }
+    
+    const ctx = document.getElementById('chart-conversations')?.getContext('2d');
+    if (!ctx || !data || !data.length) return;
+    
+    charts.c1 = new Chart(ctx, {
+        type: 'bar',
         data: {
             labels: data.map(d => d.label),
             datasets: [{
                 label: 'Hội thoại',
                 data: data.map(d => d.conversations),
-                borderColor: '#3B82F6',
-                backgroundColor: 'rgba(59,130,246,0.1)',
-                fill: true, tension: 0.4, pointRadius: 2,
-            }, {
-                label: 'Tin nhắn',
-                data: data.map(d => d.messages),
-                borderColor: '#8B5CF6',
-                backgroundColor: 'rgba(139,92,246,0.05)',
-                fill: true, tension: 0.4, pointRadius: 2,
-            }],
+                backgroundColor: '#3B82F6',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false }, datalabels: { display: false } },
+            scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 } } } }
+        }
+    });
+}
+
+function renderChart2_Revenue(data) {
+    const ctx = document.getElementById('chart-revenue')?.getContext('2d');
+    if (!ctx || !data || !data.length) return;
+    
+    charts.c2 = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.map(d => d.label),
+            datasets: [{
+                label: 'Đơn chốt',
+                data: data.map(d => d.signed),
+                backgroundColor: '#10B981',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false }, datalabels: { display: false } },
+            scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 } } } }
+        }
+    });
+}
+
+function renderChart3_Marketing(data) {
+    const row = document.getElementById('charts-row-2');
+    if (!row) return;
+    if (!row.querySelector('#chart-marketing')) {
+        row.innerHTML = `
+            <div class="chart-card">
+                <div class="chart-title"><i data-lucide="trending-up" class="text-purple-500"></i> Hiệu suất MKT (Inbox vs Hội thoại Ads)</div>
+                <div style="height:260px"><canvas id="chart-marketing"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title"><i data-lucide="alert-triangle" class="text-red-500"></i> Xu hướng Sai đối tượng</div>
+                <div style="height:260px"><canvas id="chart-wrong-target"></canvas></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title"><i data-lucide="award" class="text-orange-500"></i> Top 10 Chiến dịch</div>
+                <div style="height:260px"><canvas id="chart-top-campaigns"></canvas></div>
+            </div>
+        `;
+        if (window.lucide) window.lucide.createIcons();
+    }
+    
+    const ctx = document.getElementById('chart-marketing')?.getContext('2d');
+    if (!ctx || !data || !data.length) return;
+    
+    charts.c3 = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.map(d => d.label),
+            datasets: [
+                {
+                    type: 'line',
+                    label: 'Inbox',
+                    data: data.map(d => d.messages),
+                    borderColor: '#8B5CF6',
+                    backgroundColor: '#8B5CF6',
+                    yAxisID: 'y1',
+                    tension: 0.4
+                },
+                {
+                    type: 'bar',
+                    label: 'Hội thoại Ads',
+                    data: data.map(d => d.spend),
+                    backgroundColor: 'rgba(59,130,246,0.3)',
+                    yAxisID: 'y',
+                    borderRadius: 4
+                }
+            ]
         },
         options: {
             responsive: true, maintainAspectRatio: false,
             plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } }, datalabels: { display: false } },
             scales: {
                 x: { grid: { display: false }, ticks: { font: { size: 10 } } },
-                y: { grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 } } },
-            },
-        },
+                y: { type: 'linear', display: true, position: 'left', grid: { color: '#F1F5F9' }, title: { display: true, text: 'Hội thoại Ads', font: { size: 10} } },
+                y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Inbox', font: { size: 10} }, min: 0 }
+            }
+        }
     });
 }
 
-function renderStaffChart(data) {
-    const el = document.getElementById('top-staff-list');
-    if (!el || !data.staff) return;
+function renderChart4_WrongTarget(data) {
+    const ctx = document.getElementById('chart-wrong-target')?.getContext('2d');
+    if (!ctx || !data || !data.length) return;
+    
+    charts.c4 = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: data.map(d => d.label),
+            datasets: [
+                {
+                    type: 'line',
+                    label: 'Tỷ lệ Sai ĐT',
+                    data: data.map(d => d.conversations ? (d.wrongTarget / d.conversations)*100 : 0),
+                    borderColor: '#EF4444',
+                    backgroundColor: '#EF4444',
+                    yAxisID: 'y1',
+                    tension: 0.4
+                },
+                {
+                    type: 'bar',
+                    label: 'Sai ĐT',
+                    data: data.map(d => d.wrongTarget),
+                    backgroundColor: 'rgba(239,68,68,0.3)',
+                    yAxisID: 'y',
+                    borderRadius: 4
+                }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } }, datalabels: { display: false } },
+            scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+                y: { type: 'linear', display: true, position: 'left', grid: { color: '#F1F5F9' } },
+                y1: { type: 'linear', display: true, position: 'right', grid: { drawOnChartArea: false }, min: 0 }
+            }
+        }
+    });
+}
 
-    const top5 = data.staff.slice(0, 5);
-    const maxConv = Math.max(...top5.map(s => s.conversations), 1);
+function renderChart5_TopCampaigns(topCampData) {
+    const ctx = document.getElementById('chart-top-campaigns')?.getContext('2d');
+    if (!ctx || !topCampData || !topCampData.length) return;
+    
+    const sorted = [...topCampData].sort((a, b) => b.conversations - a.conversations).slice(0, 10);
+    
+    charts.c5 = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: sorted.map(d => d.name.length > 20 ? d.name.substring(0,20)+'...' : d.name),
+            datasets: [{
+                label: 'Hội thoại',
+                data: sorted.map(d => d.conversations),
+                backgroundColor: '#F59E0B',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false }, datalabels: { display: false }, tooltip: { callbacks: { title: (ctx) => sorted[ctx[0].dataIndex].name } } },
+            scales: { x: { grid: { color: '#F1F5F9' }, ticks: { font: { size: 10 } } }, y: { grid: { display: false }, ticks: { font: { size: 10 } } } }
+        }
+    });
+}
 
-    el.innerHTML = top5.map((s, i) => `
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 0;${i < 4 ? 'border-bottom:1px solid var(--border-light)' : ''}">
-            <span style="font-size:12px;font-weight:700;color:${i < 3 ? 'var(--blue)' : 'var(--text-muted)'};min-width:20px">#${i + 1}</span>
-            <div style="flex:1">
-                <div style="font-size:12px;font-weight:600">${s.userName}</div>
-                <div style="font-size:10px;color:var(--text-muted)">${fmtNumber(s.conversations)} hội thoại · ${fmtNumber(s.signed)} chốt</div>
+function renderChart6_MessageStatus(staffData) {
+    const row = document.getElementById('charts-row-3');
+    if (!row) return;
+    if (!row.querySelector('#chart-message-status')) {
+        row.innerHTML = `
+            <div class="chart-card">
+                <div class="chart-title"><i data-lucide="pie-chart" class="text-indigo-500"></i> Phân bố tin nhắn theo trạng thái</div>
+                <div style="height:260px"><canvas id="chart-message-status"></canvas></div>
             </div>
-            <div style="width:60px">
-                <div class="progress"><div class="progress-bar" style="width:${(s.conversations / maxConv * 100)}%"></div></div>
+            <div class="chart-card">
+                <div class="chart-title"><i data-lucide="map" class="text-teal-500"></i> So sánh chi nhánh</div>
+                <div style="height:260px"><canvas id="chart-branch-comparison"></canvas></div>
             </div>
-        </div>
-    `).join('');
-
-    // Pie chart
-    const totalInbox = data.staff.reduce((s, r) => s + (r.inbox || 0), 0);
-    const totalComment = data.staff.reduce((s, r) => s + (r.comment || 0), 0);
-    const totalOther = data.totals ? Math.max(0, (data.totals.messages || 0) - totalInbox - totalComment) : 0;
-
-    const pieCtx = document.getElementById('type-chart')?.getContext('2d');
-    if (pieCtx && (totalInbox + totalComment + totalOther) > 0) {
-        if (charts.type) charts.type.destroy();
-        charts.type = new Chart(pieCtx, {
+            <div class="chart-card">
+                <div class="chart-title"><i data-lucide="filter" class="text-cyan-500"></i> Phễu chuyển đổi</div>
+                <div id="funnel-container" style="height:260px;overflow-y:auto;padding:8px 0"></div>
+            </div>
+        `;
+        if (window.lucide) window.lucide.createIcons();
+    }
+    
+    const pieCtx = document.getElementById('chart-message-status')?.getContext('2d');
+    if (!pieCtx || !staffData || !staffData.totals) return;
+    
+    const t = staffData.totals;
+    const totalInbox = t.inbox || 0;
+    const totalComment = t.comment || 0;
+    const totalOther = Math.max(0, (t.messages || 0) - totalInbox - totalComment);
+    
+    if ((totalInbox + totalComment + totalOther) > 0) {
+        charts.c6 = new Chart(pieCtx, {
             type: 'doughnut',
             data: {
                 labels: ['Inbox', 'Comment', 'Khác'],
@@ -311,31 +482,14 @@ function renderStaffChart(data) {
     }
 }
 
-async function renderBranchComparison(staffData, tagMap) {
-    const row = document.getElementById('charts-row-2');
-    if (!row) return;
-
-    const preset = document.getElementById('time-preset')?.value || 'this_month';
-    const { from, to } = getDateRange(preset);
-
-    row.innerHTML = `
-        <div class="chart-card">
-            <div class="chart-title"><i data-lucide="building-2"></i> So sánh chi nhánh (theo tag)</div>
-            <div style="height:260px"><canvas id="branch-chart"></canvas></div>
-        </div>
-        <div class="chart-card">
-            <div class="chart-title"><i data-lucide="activity"></i> Phễu chuyển đổi</div>
-            <div id="funnel-container" style="height:260px;overflow-y:auto;padding:8px 0"></div>
-        </div>
-    `;
-    if (window.lucide) window.lucide.createIcons();
-
+async function renderChart7_Branch(staffData, reqData, tagMap) {
+    const ctx = document.getElementById('chart-branch-comparison')?.getContext('2d');
+    if (!ctx) return;
+    
     try {
-        const branches = await apiGet(`/dashboard/branch-summary?from=${from}&to=${to}`);
-        const ctx = document.getElementById('branch-chart')?.getContext('2d');
-        if (ctx && branches.length) {
-            if (charts.branch) charts.branch.destroy();
-            charts.branch = new Chart(ctx, {
+        const branches = await apiGet(`/dashboard/branch-summary?from=${reqData.from}&to=${reqData.to}`);
+        if (branches.length) {
+            charts.c7 = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: branches.map(b => b.display_name),
@@ -352,30 +506,30 @@ async function renderBranchComparison(staffData, tagMap) {
             });
         }
     } catch { /* ignore */ }
+}
 
-    // Funnel
+function renderChart8_Funnel(staffData) {
     const funnelEl = document.getElementById('funnel-container');
-    if (funnelEl && staffData?.totals) {
-        const t = staffData.totals;
-        const steps = [
-            { label: 'Hội thoại', value: t.conversations, color: 'var(--blue)' },
-            { label: 'Khách hàng', value: t.customers, color: '#8B5CF6' },
-            { label: 'Có SĐT', value: t.phone, color: 'var(--orange)' },
-            { label: 'Đã chốt', value: t.signed, color: 'var(--green)' },
-        ];
-        const maxVal = Math.max(steps[0].value, 1);
-        funnelEl.innerHTML = `<div class="funnel">${steps.map(s => `
-            <div class="funnel-step">
-                <div class="funnel-label">${s.label}</div>
-                <div class="funnel-bar-wrapper">
-                    <div class="funnel-bar" style="width:${Math.max((s.value / maxVal * 100), 3)}%;background:${s.color}">
-                        ${fmtNumber(s.value)}
-                    </div>
+    if (!funnelEl || !staffData?.totals) return;
+    const t = staffData.totals;
+    const steps = [
+        { label: 'Hội thoại', value: t.conversations, color: 'var(--blue)' },
+        { label: 'Khách hàng', value: t.customers, color: '#8B5CF6' },
+        { label: 'Có SĐT', value: t.phone, color: 'var(--orange)' },
+        { label: 'Đã chốt', value: t.signed, color: 'var(--green)' },
+    ];
+    const maxVal = Math.max(steps[0].value, 1);
+    funnelEl.innerHTML = `<div class="funnel">${steps.map(s => `
+        <div class="funnel-step">
+            <div class="funnel-label">${s.label}</div>
+            <div class="funnel-bar-wrapper">
+                <div class="funnel-bar" style="width:${Math.max((s.value / maxVal * 100), 3)}%;background:${s.color}">
+                    ${fmtNumber(s.value)}
                 </div>
-                <div class="funnel-count">${s.value > 0 && s !== steps[0] ? fmtPercent(s.value / steps[0].value * 100) : ''}</div>
             </div>
-        `).join('')}</div>`;
-    }
+            <div class="funnel-count">${s.value > 0 && s !== steps[0] ? fmtPercent(s.value / steps[0].value * 100) : ''}</div>
+        </div>
+    `).join('')}</div>`;
 }
 
 // ─── Staff Performance Table ───
