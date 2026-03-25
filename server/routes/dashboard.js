@@ -71,7 +71,7 @@ router.get('/kpis', async (req, res) => {
         // Ads data
         const sqlAds = `
             SELECT 
-                SUM(spend)::int AS spend,
+                SUM(spend)::bigint AS spend,
                 COUNT(*) FILTER (WHERE status = 'ACTIVE') AS ads_running,
                 COUNT(*) FILTER (WHERE status = 'PAUSED') AS ads_paused
             FROM channels
