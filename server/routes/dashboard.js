@@ -302,26 +302,33 @@ router.get('/staff', async (req, res) => {
 
         const pageFilter = pageId ? 'AND page_id = $3' : '';
         const params = pageId ? [from, to, pageId] : [from, to];
-
         const sql = `
       SELECT
-        dr.user_pancake_id AS "userId",
-        MAX(dr.user_name) AS "userName",
-        SUM(dr.conversations)::int AS conversations,
-        SUM(dr.total_messages)::int AS messages,
-        SUM(dr.inbox_count)::int AS inbox,
-        SUM(dr.comment_count)::int AS comment,
-        SUM(dr.unique_customers)::int AS customers,
-        SUM(dr.has_phone)::int AS phone,
-        SUM(dr.wrong_target)::int AS "wrongTarget",
-        SUM(dr.signed)::int AS signed,
-        ARRAY_AGG(DISTINCT COALESCE(p.name, dr.page_id)) AS "pageNames"
-      FROM daily_reports dr
-      LEFT JOIN pages p ON p.page_id = dr.page_id
-      WHERE dr.date >= $1 AND dr.date <= $2 ${pageFilter.replace(/page_id/g, 'dr.page_id')}
-      GROUP BY dr.user_pancake_id
-      HAVING SUM(dr.conversations) > 0
-      ORDER BY SUM(dr.conversations) DESC
+        sub."userId",
+        COALESCE(tc.display_name, sub."userName") AS "userName",
+        sub.conversations, sub.messages, sub.inbox, sub.comment,
+        sub.customers, sub.phone, sub."wrongTarget", sub.signed, sub."pageNames"
+      FROM (
+        SELECT
+          dr.user_pancake_id AS "userId",
+          MAX(dr.user_name) AS "userName",
+          SUM(dr.conversations)::int AS conversations,
+          SUM(dr.total_messages)::int AS messages,
+          SUM(dr.inbox_count)::int AS inbox,
+          SUM(dr.comment_count)::int AS comment,
+          SUM(dr.unique_customers)::int AS customers,
+          SUM(dr.has_phone)::int AS phone,
+          SUM(dr.wrong_target)::int AS "wrongTarget",
+          SUM(dr.signed)::int AS signed,
+          ARRAY_AGG(DISTINCT COALESCE(p.name, dr.page_id)) AS "pageNames"
+        FROM daily_reports dr
+        LEFT JOIN pages p ON p.page_id = dr.page_id
+        WHERE dr.date >= $1 AND dr.date <= $2 ${pageFilter.replace(/page_id/g, 'dr.page_id')}
+        GROUP BY dr.user_pancake_id
+        HAVING SUM(dr.conversations) > 0
+      ) sub
+      LEFT JOIN tag_classifications tc ON tc.category = 'staff' AND LOWER(tc.tag_name) = LOWER(sub."userName")
+      ORDER BY sub.conversations DESC
     `;
 
         const { rows: staff } = await query(sql, params);
@@ -478,15 +485,7 @@ router.get('/customers', async (req, res) => {
         // Paginated data
         const sql = `
       SELECT pancake_id, name, phone, phone_numbers, gender, tags,
-             last_active, page_id, total_conversations,
-             CASE
-               WHEN total_conversations <= 1 AND last_active >= (CURRENT_DATE - 30)::text THEN 'new'
-               WHEN total_conversations BETWEEN 2 AND 5 AND last_active >= (CURRENT_DATE - 30)::text THEN 'active'
-               WHEN total_conversations > 5 AND last_active >= (CURRENT_DATE - 30)::text THEN 'loyal'
-               WHEN last_active < (CURRENT_DATE - 30)::text AND last_active >= (CURRENT_DATE - 90)::text THEN 'at_risk'
-               WHEN last_active < (CURRENT_DATE - 90)::text THEN 'churned'
-               ELSE 'new'
-             END AS segment
+             last_active, page_id, total_conversations
       FROM customers
       ${where}
       ORDER BY last_active DESC NULLS LAST
@@ -505,17 +504,6 @@ router.get('/customers', async (req, res) => {
             psid: r.pancake_id,
         }));
 
-        // Segment counts
-        const { rows: segCounts } = await query(`
-      SELECT
-        COUNT(*) FILTER (WHERE total_conversations <= 1 AND last_active >= (CURRENT_DATE - 30)::text) AS new,
-        COUNT(*) FILTER (WHERE total_conversations BETWEEN 2 AND 5 AND last_active >= (CURRENT_DATE - 30)::text) AS active,
-        COUNT(*) FILTER (WHERE total_conversations > 5 AND last_active >= (CURRENT_DATE - 30)::text) AS loyal,
-        COUNT(*) FILTER (WHERE last_active < (CURRENT_DATE - 30)::text AND last_active >= (CURRENT_DATE - 90)::text) AS at_risk,
-        COUNT(*) FILTER (WHERE last_active < (CURRENT_DATE - 90)::text) AS churned
-      FROM customers ${where}
-    `, params.slice(0, params.length - 2));
-
         res.json({
             data: result,
             pagination: {
@@ -524,7 +512,6 @@ router.get('/customers', async (req, res) => {
                 total: parseInt(total),
                 totalPages: Math.ceil(parseInt(total) / lim),
             },
-            segments: segCounts[0] || {},
         });
     } catch (err) {
         console.error('Customers error:', err);
@@ -813,6 +800,54 @@ router.get('/staff-tag-stats', async (req, res) => {
         res.json(result);
     } catch (err) {
         console.error('Staff tag stats error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /api/dashboard/tag-cross-branch
+ * Cross-tabulation: tag counts (service/lifecycle/location) × branch.
+ */
+router.get('/tag-cross-branch', async (req, res) => {
+    try {
+        const cached = getCached('tag_cross_branch');
+        if (cached) return res.json(cached);
+
+        // Get branches
+        const { rows: branches } = await query(
+            `SELECT tag_name, display_name FROM tag_classifications WHERE category = 'branch' AND is_active = TRUE ORDER BY sort_order`
+        );
+
+        // For each category (service, lifecycle, location), count per branch
+        const result = {};
+        for (const cat of ['service', 'lifecycle', 'location']) {
+            const { rows: catTags } = await query(
+                `SELECT tag_name, display_name FROM tag_classifications WHERE category = $1 AND is_active = TRUE ORDER BY sort_order`,
+                [cat]
+            );
+
+            const catData = [];
+            for (const tag of catTags) {
+                const row = { tag_name: tag.tag_name, display_name: tag.display_name, branches: {}, total: 0 };
+                for (const br of branches) {
+                    const { rows: [{ count }] } = await query(
+                        `SELECT COUNT(DISTINCT c.pancake_id) AS count FROM customers c
+                         WHERE c.tags::text ILIKE $1 AND c.tags::text ILIKE $2`,
+                        [`%${tag.tag_name}%`, `%${br.tag_name}%`]
+                    );
+                    row.branches[br.display_name] = parseInt(count);
+                    row.total += parseInt(count);
+                }
+                catData.push(row);
+            }
+            result[cat] = catData;
+        }
+        result.branches = branches.map(b => b.display_name);
+
+        setCache('tag_cross_branch', result, 120_000);
+        res.json(result);
+    } catch (err) {
+        console.error('Tag cross branch error:', err);
         res.status(500).json({ error: err.message });
     }
 });

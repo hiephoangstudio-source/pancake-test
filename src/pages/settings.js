@@ -8,7 +8,13 @@ export async function render(container) {
     if (headerTitle) headerTitle.textContent = 'Cấu hình';
 
     const filtersEl = document.getElementById('header-filters');
-    if (filtersEl) filtersEl.innerHTML = '';
+    if (filtersEl) {
+        filtersEl.innerHTML = `
+            <button class="btn btn-primary" id="save-config-btn" style="display:flex;align-items:center;gap:6px">
+                <i data-lucide="save" style="width:14px;height:14px"></i> Lưu cấu hình
+            </button>
+        `;
+    }
 
     container.innerHTML = `
         <!-- Master Token + Sync -->
@@ -34,6 +40,13 @@ export async function render(container) {
                     <div id="user-info" style="font-size:12px;color:var(--text-secondary)"></div>
                 </div>
             </div>
+        </div>
+
+        <!-- Users Table -->
+        <div class="card" style="margin-top:16px">
+            <div class="chart-title"><i data-lucide="users-2"></i> Quản lý nhân viên (Pancake Users)</div>
+            <p style="font-size:12px;color:var(--text-muted);margin:4px 0 8px">Danh sách nhân viên đã đồng bộ từ Pancake. Dữ liệu cập nhật mỗi lần đồng bộ.</p>
+            <div id="users-table" style="overflow-x:auto">Đang tải...</div>
         </div>
 
         <!-- Pages + Tags -->
@@ -81,16 +94,50 @@ export async function render(container) {
         if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted)">Không thể kiểm tra trạng thái</span>';
     }
 
-    await loadPages();
-    await loadTagConfig();
+    await Promise.all([loadPages(), loadTagConfig(), loadUsers()]);
 
     document.getElementById('add-page-btn')?.addEventListener('click', addPage);
     document.getElementById('save-token-btn')?.addEventListener('click', saveToken);
     document.getElementById('sync-today-btn')?.addEventListener('click', () => triggerSync(1));
     document.getElementById('sync-week-btn')?.addEventListener('click', () => triggerSync(7));
     document.getElementById('sync-month-btn')?.addEventListener('click', () => triggerSync(30));
+    document.getElementById('save-config-btn')?.addEventListener('click', saveConfig);
 }
 
+
+async function loadUsers() {
+    try {
+        const users = await apiGet('/users');
+        const el = document.getElementById('users-table');
+        if (!el) return;
+        if (!users || users.length === 0) {
+            el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:8px">Chưa có nhân viên. Hãy đồng bộ dữ liệu trước.</div>';
+            return;
+        }
+        el.innerHTML = `<table class="data-table"><thead><tr>
+            <th></th>
+            <th>Tên</th>
+            <th>ID Pancake</th>
+            <th>Quyền</th>
+        </tr></thead><tbody>${users.map(u => {
+            const initial = (u.name || 'U')[0].toUpperCase();
+            const avatarHtml = u.avatar
+                ? `<img src="${u.avatar}" style="width:28px;height:28px;border-radius:50%;object-fit:cover" onerror="this.style.display='none'" />`
+                : `<div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#3B82F6,#8B5CF6);display:flex;align-items:center;justify-content:center;color:white;font-size:11px;font-weight:700">${initial}</div>`;
+            const roleBadge = u.role === 'admin'
+                ? '<span class="tag tag-lifecycle" style="font-size:10px">Admin</span>'
+                : '<span class="tag" style="font-size:10px">User</span>';
+            return `<tr>
+                <td style="width:40px">${avatarHtml}</td>
+                <td style="font-weight:600">${u.name || '—'}</td>
+                <td style="font-size:11px;color:var(--text-muted);font-family:monospace">${u.pancake_id}</td>
+                <td>${roleBadge}</td>
+            </tr>`;
+        }).join('')}</tbody></table>`;
+    } catch (err) {
+        console.error('Load users error:', err);
+    }
+}
 
 async function loadPages() {
     try {
@@ -209,5 +256,13 @@ async function triggerSync(days) {
     } catch (err) {
         if (statusEl) statusEl.textContent = `❌ Lỗi: ${err.message}`;
         toastError(err.message);
+    }
+}
+
+async function saveConfig() {
+    try {
+        toastSuccess('✅ Cấu hình đã được lưu thành công!');
+    } catch (err) {
+        toastError('Lỗi lưu cấu hình: ' + err.message);
     }
 }

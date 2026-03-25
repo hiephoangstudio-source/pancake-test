@@ -232,7 +232,7 @@ function renderKpis(data) {
     if (window.lucide) window.lucide.createIcons();
 }
 
-export function render8Charts(trendData, topCampData, staffData, tagMap, reqData) {
+export async function render8Charts(trendData, topCampData, staffData, tagMap, reqData) {
     if (window.lucide) window.lucide.createIcons();
     
     // Destroy old charts to prevent memory leaks and overlapping renders
@@ -248,7 +248,7 @@ export function render8Charts(trendData, topCampData, staffData, tagMap, reqData
     renderChart5_TopCampaigns(topCampData);
     
     // R3
-    renderChart6_MessageStatus(staffData);
+    await renderChart6_StatusByTag(tagMap);
     renderChart7_Branch(staffData, reqData, tagMap);
     renderChart8_Funnel(staffData);
 }
@@ -441,13 +441,13 @@ function renderChart5_TopCampaigns(topCampData) {
     });
 }
 
-function renderChart6_MessageStatus(staffData) {
+async function renderChart6_StatusByTag(tagMap) {
     const row = document.getElementById('charts-row-3');
     if (!row) return;
     if (!row.querySelector('#chart-message-status')) {
         row.innerHTML = `
             <div class="chart-card">
-                <div class="chart-title"><i data-lucide="pie-chart" class="text-indigo-500"></i> Phân bố tin nhắn theo trạng thái</div>
+                <div class="chart-title"><i data-lucide="pie-chart" class="text-indigo-500"></i> Phân bố trạng thái KH</div>
                 <div style="height:260px"><canvas id="chart-message-status"></canvas></div>
             </div>
             <div class="chart-card">
@@ -461,27 +461,39 @@ function renderChart6_MessageStatus(staffData) {
         `;
         if (window.lucide) window.lucide.createIcons();
     }
-    
+
     const pieCtx = document.getElementById('chart-message-status')?.getContext('2d');
-    if (!pieCtx || !staffData || !staffData.totals) return;
-    
-    const t = staffData.totals;
-    const totalInbox = t.inbox || 0;
-    const totalComment = t.comment || 0;
-    const totalOther = Math.max(0, (t.messages || 0) - totalInbox - totalComment);
-    
-    if ((totalInbox + totalComment + totalOther) > 0) {
-        charts.c6 = new Chart(pieCtx, {
-            type: 'doughnut',
-            data: {
-                labels: ['Inbox', 'Comment', 'Khác'],
-                datasets: [{ data: [totalInbox, totalComment, totalOther], backgroundColor: ['#3B82F6', '#8B5CF6', '#94A3B8'], borderWidth: 0, cutout: '55%' }],
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 12, usePointStyle: true } }, datalabels: { display: false } },
-            },
-        });
+    if (!pieCtx) return;
+
+    try {
+        const tagCounts = await apiGet('/dashboard/tag-counts');
+        const lifecycleTags = Object.values(tagMap).filter(t => t.category === 'lifecycle');
+        const labels = [];
+        const data = [];
+        const colors = [];
+        for (const t of lifecycleTags) {
+            const count = tagCounts[t.tag_name.toLowerCase()] || 0;
+            if (count > 0) {
+                labels.push(t.display_name);
+                data.push(count);
+                colors.push(t.color || '#94A3B8');
+            }
+        }
+        if (data.length > 0) {
+            charts.c6 = new Chart(pieCtx, {
+                type: 'doughnut',
+                data: {
+                    labels,
+                    datasets: [{ data, backgroundColor: colors, borderWidth: 0, cutout: '55%' }],
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 12, usePointStyle: true } }, datalabels: { display: false } },
+                },
+            });
+        }
+    } catch (err) {
+        console.error('Chart6 tag status error:', err);
     }
 }
 
