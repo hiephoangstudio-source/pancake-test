@@ -305,7 +305,7 @@ router.get('/staff', async (req, res) => {
         const sql = `
       SELECT
         sub."userId",
-        COALESCE(tc.display_name, sub."userName") AS "userName",
+        COALESCE(u.name, sub."userName") AS "userName",
         sub.conversations, sub.messages, sub.inbox, sub.comment,
         sub.customers, sub.phone, sub."wrongTarget", sub.signed, sub."pageNames"
       FROM (
@@ -327,7 +327,7 @@ router.get('/staff', async (req, res) => {
         GROUP BY dr.user_pancake_id
         HAVING SUM(dr.conversations) > 0
       ) sub
-      LEFT JOIN tag_classifications tc ON tc.category = 'staff' AND LOWER(tc.tag_name) = LOWER(sub."userName")
+      LEFT JOIN users u ON u.pancake_id = sub."userId"
       ORDER BY sub.conversations DESC
     `;
 

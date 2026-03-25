@@ -1,5 +1,5 @@
 import { apiGet } from '../utils/api.js';
-import { fmtNumber, fmtMoney, fmtPercent, fmtDate, getDateRange, getPrevRange, calcDelta } from '../utils/format.js';
+import { fmtNumber, fmtMoney, fmtPercent, fmtDate, fmtTick, getDateRange, getPrevRange, calcDelta } from '../utils/format.js';
 import { renderKpiCard, renderKpiGrid } from '../components/kpiCard.js';
 import { getBranchTagNames } from '../utils/tagClassifier.js';
 import { openConversationModal } from '../components/conversationModal.js';
@@ -231,10 +231,7 @@ function renderKpis(data) {
 export async function render8Charts(trendData, topCampData, staffData, tagMap, reqData) {
     if (window.lucide) window.lucide.createIcons();
 
-    // Compact tick format helper: 1000000 → 1tr, 1000 → 1K
-    const fmtTick = (v) => v >= 1e6 ? (v/1e6).toFixed(v >= 1e7 ? 0 : 1) + 'tr' : v >= 1e3 ? (v/1e3).toFixed(0) + 'K' : v;
-
-    // Tooltip styling only (don't override global text colors)
+    // Tooltip styling only
     if (!Chart._2hSetup) {
         Chart._2hSetup = true;
         Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(15,23,42,0.95)';

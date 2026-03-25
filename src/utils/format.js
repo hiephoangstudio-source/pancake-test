@@ -12,6 +12,13 @@ export function fmtMoney(n) {
     return num.toLocaleString('vi-VN') + 'đ';
 }
 
+export function fmtTick(v) {
+    if (v >= 1e9) return (v/1e9).toFixed(1) + ' tỷ';
+    if (v >= 1e6) return (v/1e6).toFixed(v >= 1e7 ? 0 : 1) + 'tr';
+    if (v >= 1e3) return (v/1e3).toFixed(0) + 'K';
+    return v;
+}
+
 export function fmtPercent(n, decimals = 1) {
     if (n == null || isNaN(n)) return '0%';
     return Number(n).toFixed(decimals) + '%';
@@ -39,7 +46,15 @@ export function fmtTimeDuration(seconds) {
 export function calcDelta(current, prev) {
     if (!prev || prev === 0) return null;
     const pct = ((current - prev) / prev) * 100;
-    return { value: pct, label: (pct > 0 ? '+' : '') + pct.toFixed(1) + '%', direction: pct > 0 ? 'up' : pct < 0 ? 'down' : 'neutral' };
+    const diff = current - prev;
+    const arrow = pct > 0 ? '↑' : pct < 0 ? '↓' : '';
+    const sign = pct > 0 ? '+' : '';
+    return {
+        value: pct,
+        label: sign + pct.toFixed(1) + '% ' + arrow,
+        sublabel: sign + fmtNumber(diff) + ' so kỳ trước',
+        direction: pct > 0 ? 'up' : pct < 0 ? 'down' : 'neutral'
+    };
 }
 
 export function getDateRange(preset) {
