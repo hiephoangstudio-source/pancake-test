@@ -17,24 +17,26 @@ router.get('/', async (req, res) => {
         let params = [];
         let paramIdx = 1;
 
-        if (pageId) { conditions.push(`page_id = $${paramIdx++}`); params.push(pageId); }
-        if (search) { conditions.push(`name ILIKE $${paramIdx++}`); params.push(`%${search}%`); }
-        if (status) { conditions.push(`status = $${paramIdx++}`); params.push(status); }
+        if (pageId) { conditions.push(`ch.page_id = $${paramIdx++}`); params.push(pageId); }
+        if (search) { conditions.push(`ch.name ILIKE $${paramIdx++}`); params.push(`%${search}%`); }
+        if (status) { conditions.push(`ch.status = $${paramIdx++}`); params.push(status); }
 
         const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
 
         const { rows: [{ count: total }] } = await query(
-            `SELECT COUNT(*) AS count FROM channels ${where}`, params
+            `SELECT COUNT(*) AS count FROM channels ch ${where}`, params
         );
 
         const sql = `
-      SELECT *,
+      SELECT ch.*,
+        COALESCE(pg.name, ch.page_id) AS "pageName",
         CASE WHEN impressions > 0 THEN ROUND(clicks::numeric / impressions * 100, 2) ELSE 0 END AS ctr,
         CASE WHEN clicks > 0 THEN ROUND(spend / clicks, 0) ELSE 0 END AS cpc,
         CASE WHEN conversations > 0 THEN ROUND(spend / conversations, 0) ELSE 0 END AS cost_per_conversation,
         CASE WHEN phones > 0 THEN ROUND(spend / phones, 0) ELSE 0 END AS cpl,
         CASE WHEN conversations > 0 THEN ROUND(phones::numeric / conversations * 100, 1) ELSE 0 END AS conversion_rate
-      FROM channels
+      FROM channels ch
+      LEFT JOIN pages pg ON pg.page_id = ch.page_id
       ${where}
       ORDER BY spend DESC
       LIMIT $${paramIdx} OFFSET $${paramIdx + 1}

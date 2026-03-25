@@ -222,7 +222,7 @@ function renderKpis(data) {
     ];
 
     const el = document.getElementById('kpi-container');
-    if (el) el.innerHTML = renderKpiGrid(cards);
+    if (el) el.innerHTML = cards.join('');
     if (window.lucide) window.lucide.createIcons();
 }
 
