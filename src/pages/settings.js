@@ -98,16 +98,41 @@ async function loadPages() {
         var el = document.getElementById('pages-list');
         if (!el) return;
         if (pages.length === 0) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Chưa có trang nào</div>'; return; }
-        var html = '<table class="data-table"><thead><tr><th>Tên</th><th>ID</th><th>Token</th></tr></thead><tbody>';
+        var html = '<table class="data-table"><thead><tr><th>Tên</th><th>ID</th><th>Token</th><th style="width:40px"></th></tr></thead><tbody>';
         for (var i = 0; i < pages.length; i++) {
             var p = pages[i];
             var isLong = p.page_id.length > 16;
-            html += '<tr><td style="font-weight:600">' + p.name + '</td>';
+            html += '<tr data-page-id="' + p.page_id + '" data-page-name="' + (p.name || '') + '">';
+            html += '<td style="font-weight:600" class="page-name-cell">' + p.name + '</td>';
             html += '<td style="font-size:11px;color:var(--text-muted)">' + (isLong ? p.page_id.substring(0,16)+'...' : p.page_id) + '</td>';
-            html += '<td style="font-size:11px">' + (p._hasToken ? '✅' : '❌') + '</td></tr>';
+            html += '<td style="font-size:11px">' + (p._hasToken ? '✅' : '❌') + '</td>';
+            html += '<td><button class="btn-icon btn-icon-sm edit-page-btn" title="Sửa tên"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button></td>';
+            html += '</tr>';
         }
         html += '</tbody></table>';
         el.innerHTML = html;
+
+        // Bind edit handlers
+        el.querySelectorAll('.edit-page-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var row = btn.closest('tr');
+                var cell = row.querySelector('.page-name-cell');
+                var pid = row.dataset.pageId;
+                var curName = row.dataset.pageName;
+                cell.innerHTML = '<input class="inline-edit-input" value="' + curName + '" />';
+                var inp = cell.querySelector('input');
+                inp.focus(); inp.select();
+                var save = async function() {
+                    var newName = inp.value.trim();
+                    if (newName && newName !== curName) {
+                        try { await apiPost('/pages', { page_id: pid, name: newName, access_token: '********' }); toastSuccess('Đã đổi tên!'); } catch(e) { toastError(e.message); }
+                    }
+                    await loadPages();
+                };
+                inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') save(); if (e.key === 'Escape') loadPages(); });
+                inp.addEventListener('blur', save);
+            });
+        });
     } catch (err) { console.error(err); }
 }
 

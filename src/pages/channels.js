@@ -33,16 +33,6 @@ export async function render(container, { tagMap }) {
 
     container.innerHTML = `
         <div id="ch-kpis" class="kpi-grid" style="margin-bottom:12px"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-            <div class="card">
-                <div class="chart-title"><i data-lucide="megaphone"></i> Phễu quảng cáo</div>
-                <div id="ads-funnel" style="margin-top:8px"></div>
-            </div>
-            <div class="card">
-                <div class="chart-title"><i data-lucide="bar-chart-3"></i> So sánh Pages (chi phí)</div>
-                <div style="height:260px"><canvas id="page-spend-chart"></canvas></div>
-            </div>
-        </div>
         <div class="card">
             <div class="chart-title"><i data-lucide="list"></i> Danh sách chiến dịch QC</div>
             <table class="data-table" id="campaigns-table">
@@ -125,26 +115,6 @@ async function fetchChannels() {
             if (window.lucide) window.lucide.createIcons();
         }
 
-        // Funnel
-        const funnelEl = document.getElementById('ads-funnel');
-        if (funnelEl) {
-            const steps = [
-                { label: 'Hiển thị', value: totalImpressions, color: '#8B5CF6' },
-                { label: 'Click', value: totalClicks, color: 'var(--orange)' },
-                { label: 'Hội thoại', value: totalConv, color: 'var(--blue)' },
-                { label: 'Có SĐT', value: totalPhones, color: 'var(--green)' },
-            ];
-            const maxVal = Math.max(totalImpressions, 1);
-            funnelEl.innerHTML = `<div class="funnel">${steps.map(s => `
-                <div class="funnel-step">
-                    <div class="funnel-label">${s.label}</div>
-                    <div class="funnel-bar-wrapper">
-                        <div class="funnel-bar" style="width:${Math.max((s.value / maxVal * 100), 2)}%;background:${s.color}">${fmtNumber(s.value)}</div>
-                    </div>
-                    <div class="funnel-count">${totalImpressions > 0 ? fmtPercent(s.value / totalImpressions * 100) : ''}</div>
-                </div>
-            `).join('')}</div>`;
-        }
 
         // Campaigns table
         const tbody = document.getElementById('campaigns-body');

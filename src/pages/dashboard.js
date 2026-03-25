@@ -84,7 +84,7 @@ export async function render(container, { tagMap }) {
 
     // Layout skeleton
     container.innerHTML = ''
-        + '<div class="kpi-grid kpi-grid-7" id="kpi-container">'
+        + '<div class="kpi-grid" id="kpi-container" style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px">'
         + Array(14).fill('<div class="kpi-card"><div class="skeleton" style="height:14px;width:60px;margin-bottom:8px"></div><div class="skeleton" style="height:28px;width:80px"></div></div>').join('')
         + '</div>'
         + '<div class="chart-grid chart-grid-3" style="margin-top:12px" id="charts-row-1">'
@@ -356,7 +356,7 @@ function renderChart3_Marketing(data) {
         },
         options: {
             responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } }, datalabels: { display: false } },
+            plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } }, datalabels: { anchor: 'end', align: 'end', font: { size: 8, weight: '600' }, color: '#334155', formatter: v => v > 0 ? fmtTick(v) : '' } },
             scales: {
                 x: { grid: { display: false }, ticks: { font: { size: 10 } } },
                 y: { type: 'linear', display: true, position: 'left', grid: { color: 'rgba(148,163,184,0.08)' }, title: { display: true, text: 'Chi phí Ads', font: { size: 10} }, ticks: { callback: fmtTick } },
@@ -396,7 +396,7 @@ function renderChart4_WrongTarget(data) {
         },
         options: {
             responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } }, datalabels: { display: false } },
+            plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } }, datalabels: { anchor: 'end', align: 'end', font: { size: 8, weight: '600' }, color: '#334155', formatter: v => v > 0 ? fmtTick(v) : '' } },
             scales: {
                 x: { grid: { display: false }, ticks: { font: { size: 10 } } },
                 y: { type: 'linear', display: true, position: 'left', grid: { color: 'rgba(148,163,184,0.08)' }, ticks: { callback: fmtTick } },
