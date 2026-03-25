@@ -189,8 +189,11 @@ async function fetchAndRender(container, tagMap) {
             });
         }
 
-        // ─── Staff Performance Table (from daily_reports + customer tags) ───
-        renderStaffTable(staffData, custData, tagMap, staffFilter);
+        // ─── Fetch Staff Tag Stats directly from Backend ───
+        const staffTagStats = await apiGet('/dashboard/staff-tag-stats').catch(() => ({}));
+
+        // ─── Staff Performance Table (from daily_reports + new API stats) ───
+        renderStaffTable(staffData, staffTagStats, tagMap, staffFilter);
 
         // ─── Customer Detail Table (filtered) ───
         renderCustomerTable(custData, tagMap);
@@ -533,7 +536,7 @@ function renderChart8_Funnel(staffData) {
 }
 
 // ─── Staff Performance Table ───
-function renderStaffTable(staffData, custData, tagMap, staffFilter) {
+function renderStaffTable(staffData, staffTagCounts, tagMap, staffFilter) {
     const el = document.getElementById('dash-staff-table');
     if (!el) return;
 
@@ -545,26 +548,6 @@ function renderStaffTable(staffData, custData, tagMap, staffFilter) {
     if (displayStaff.length === 0) {
         el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:16px">Chưa có dữ liệu nhân viên</div>';
         return;
-    }
-
-    // Compute signed/visiting from customer tag cross-reference
-    const staffTagCounts = {};
-    for (const c of custData) {
-        const tags = (c.tags || []).map(t => typeof t === 'string' ? t : t.name || '');
-        const tagsStr = tags.join(' ').toLowerCase();
-        const isSigned = tagsStr.includes('ký') || tagsStr.includes('kí') || tagsStr.includes('chốt');
-        const isVisiting = tagsStr.includes('hẹn đến') || tagsStr.includes('đã đến');
-        const isWrong = tagsStr.includes('sai đối tượng');
-        for (const tag of tags) {
-            const match = Object.values(tagMap).find(t => t.category === 'staff' && t.tag_name.toLowerCase() === tag.toLowerCase());
-            if (match) {
-                const key = match.display_name.toLowerCase();
-                if (!staffTagCounts[key]) staffTagCounts[key] = { signed: 0, visiting: 0, wrong: 0 };
-                if (isSigned) staffTagCounts[key].signed++;
-                if (isVisiting) staffTagCounts[key].visiting++;
-                if (isWrong) staffTagCounts[key].wrong++;
-            }
-        }
     }
 
     el.innerHTML = `<table class="data-table"><thead><tr>

@@ -82,9 +82,9 @@ async function init() {
     // SSE real-time
     try {
         const es = new EventSource('/api/sync/events');
-        es.addEventListener('data-updated', (e) => {
+        es.addEventListener('data-updated', async (e) => {
             const data = JSON.parse(e.data);
-            const { toastInfo } = import('./components/toast.js');
+            const { toastInfo } = await import('./components/toast.js');
             toastInfo(`🔄 Đã cập nhật ${data.changes || ''} dữ liệu mới`);
             navigate(); // reload current page
         });

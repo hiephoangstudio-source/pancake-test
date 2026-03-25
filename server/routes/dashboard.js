@@ -778,4 +778,43 @@ router.get('/customer-kpis', async (req, res) => {
     }
 });
 
+/**
+ * GET /api/dashboard/staff-tag-stats
+ * Lấy chính xác số lượng Đã chốt, Hẹn đến, Sai đối tượng theo TỪNG NHÂN VIÊN bằng cách join bảng khách hàng với phân loại tag.
+ */
+router.get('/staff-tag-stats', async (req, res) => {
+    try {
+        const cached = getCached('dash_staff_tag_stats');
+        if (cached) return res.json(cached);
+
+        const sql = `
+            SELECT
+              s.tag_name AS staff_tag,
+              s.display_name AS staff_name,
+              COUNT(DISTINCT c.pancake_id) FILTER(WHERE c.tags::text ~* 'ký|kí|chốt|cọc') AS signed,
+              COUNT(DISTINCT c.pancake_id) FILTER(WHERE c.tags::text ~* 'hẹn đến|đã đến') AS visiting,
+              COUNT(DISTINCT c.pancake_id) FILTER(WHERE c.tags::text ILIKE '%sai đối tượng%') AS wrong
+            FROM customers c
+            CROSS JOIN jsonb_array_elements_text(c.tags) AS t_val
+            JOIN tag_classifications s ON s.category = 'staff' AND s.tag_name ILIKE t_val
+            WHERE c.tags IS NOT NULL AND jsonb_array_length(c.tags) > 0
+            GROUP BY s.tag_name, s.display_name
+        `;
+        const { rows } = await query(sql);
+        const result = {};
+        for (const r of rows) {
+            result[r.staff_name.toLowerCase()] = {
+                signed: parseInt(r.signed) || 0,
+                visiting: parseInt(r.visiting) || 0,
+                wrong: parseInt(r.wrong) || 0
+            };
+        }
+        setCache('dash_staff_tag_stats', result, 60_000);
+        res.json(result);
+    } catch (err) {
+        console.error('Staff tag stats error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 export default router;
