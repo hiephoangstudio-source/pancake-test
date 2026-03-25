@@ -133,6 +133,42 @@ router.get('/kpis', async (req, res) => {
     }
 });
 
+function fillMissingDates(data, fromStr, toStr, groupBy = 'day') {
+    const result = [];
+    const from = new Date(fromStr);
+    const to = new Date(toStr);
+    
+    const dataMap = {};
+    for (const row of data) {
+        dataMap[row.key] = row;
+    }
+
+    if (groupBy === 'month') {
+        const curr = new Date(from.getFullYear(), from.getMonth(), 1);
+        while (curr <= to) {
+            const yyyy = curr.getFullYear();
+            const mm = String(curr.getMonth() + 1).padStart(2, '0');
+            const key = `${yyyy}-${mm}`;
+            const label = `${mm}/${yyyy}`;
+            result.push(dataMap[key] || { key, label, conversations: 0, messages: 0, signed: 0, wrongTarget: 0, spend: 0 });
+            curr.setMonth(curr.getMonth() + 1);
+        }
+    } else {
+        // default day
+        const curr = new Date(from);
+        while (curr <= to) {
+            const yyyy = curr.getFullYear();
+            const mm = String(curr.getMonth() + 1).padStart(2, '0');
+            const dd = String(curr.getDate()).padStart(2, '0');
+            const key = `${yyyy}-${mm}-${dd}`;
+            const label = `${dd}/${mm}`;
+            result.push(dataMap[key] || { key, label, conversations: 0, messages: 0, signed: 0, wrongTarget: 0, spend: 0 });
+            curr.setDate(curr.getDate() + 1);
+        }
+    }
+    return result;
+}
+
 /**
  * GET /api/dashboard/trend
  */
@@ -206,8 +242,9 @@ router.get('/trend', async (req, res) => {
             }
         }
         
-        setCache(cacheKey, rows);
-        res.json(rows);
+        const result = fillMissingDates(rows, from, to, groupBy);
+        setCache(cacheKey, result);
+        res.json(result);
     } catch (err) {
         console.error('Trend error:', err);
         res.status(500).json({ error: err.message });
