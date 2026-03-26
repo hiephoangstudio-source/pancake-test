@@ -210,7 +210,7 @@ async function loadMoreConversations() {
 function renderContact(c) {
     const initial = (c.customer_name || 'K')[0].toUpperCase();
     const tags = (c.tags || []).slice(0, 2);
-    const timeAgo = formatTimeAgo(c.updated_at || c.date);
+    const timeAgo = formatTimeAgo(c.date || c.updated_at);
     const isUnread = !c.is_read;
     const waiting = c.waiting_minutes;
 

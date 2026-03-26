@@ -71,7 +71,7 @@ html, body { height: 100%; font-family: var(--font); background: var(--bg); colo
     gap: 10px;
     border-bottom: 1px solid rgba(255,255,255,0.08);
 }
-.sidebar-brand img { height: 28px; width: auto; }
+.sidebar-brand img { height: 38px; width: auto; background: #1E293B; border-radius: 8px; padding: 4px; }
 .sidebar-brand span {
     font-weight: 700;
     font-size: 16px;

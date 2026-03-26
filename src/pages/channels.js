@@ -50,14 +50,13 @@ export async function render(container, { tagMap }) {
                         <th class="text-right">Chi phí</th>
                         <th class="text-right">Hiển thị</th>
                         <th class="text-right">Click</th>
-                        <th class="text-right">Hội thoại</th>
-                        <th class="text-right">SĐT</th>
-                        <th class="text-right">Chi phí/SĐT</th>
+                        <th class="text-right">CTR</th>
+                        <th class="text-right">CPC</th>
                         <th class="text-center">Trạng thái</th>
                     </tr>
                 </thead>
                 <tbody id="campaigns-body">
-                    <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-muted)">Đang tải...</td></tr>
+                    <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted)">Đang tải...</td></tr>
                 </tbody>
             </table>
             <div id="ch-pagination" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-top:1px solid var(--border);font-size:13px"></div>
@@ -152,10 +151,11 @@ async function fetchChannels() {
         const tbody = document.getElementById('campaigns-body');
         if (tbody) {
             if (channels.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-muted)">Chưa có dữ liệu quảng cáo</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted)">Chưa có dữ liệu quảng cáo</td></tr>';
             } else {
                 tbody.innerHTML = channels.map(ch => {
-                    const costPerPhone = Number(ch.phones) > 0 ? Number(ch.spend) / Number(ch.phones) : 0;
+                    const ctr = Number(ch.impressions) > 0 ? (Number(ch.clicks) / Number(ch.impressions) * 100).toFixed(2) : 0;
+                    const cpc = Number(ch.clicks) > 0 ? Math.round(Number(ch.spend) / Number(ch.clicks)) : 0;
                     const statusColor = ch.status === 'ACTIVE' ? 'var(--green)' : 'var(--text-muted)';
                     return `
                     <tr>
@@ -164,9 +164,8 @@ async function fetchChannels() {
                         <td class="text-right" style="font-weight:600">${fmtMoney(ch.spend)}</td>
                         <td class="text-right">${fmtNumber(ch.impressions)}</td>
                         <td class="text-right">${fmtNumber(ch.clicks)}</td>
-                        <td class="text-right">${fmtNumber(ch.conversations)}</td>
-                        <td class="text-right">${fmtNumber(ch.phones)}</td>
-                        <td class="text-right" style="color:${costPerPhone > 500000 ? 'var(--red)' : 'var(--green)'}; font-weight:600">${costPerPhone > 0 ? fmtMoney(costPerPhone) : '—'}</td>
+                        <td class="text-right">${ctr}%</td>
+                        <td class="text-right" style="font-weight:600">${cpc > 0 ? fmtMoney(cpc) : '—'}</td>
                         <td class="text-center"><span class="tag" style="color:${statusColor}">${ch.status || '—'}</span></td>
                     </tr>`;
                 }).join('');

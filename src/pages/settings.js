@@ -278,7 +278,7 @@ async function runSync() {
 }
 
 async function saveAutoSync() {
-    var interval = parseInt(document.getElementById('auto-sync-interval')?.value || '0');
+    var interval = parseFloat(document.getElementById('auto-sync-interval')?.value || '0');
     var statusEl = document.getElementById('auto-sync-status');
     try {
         await apiPost('/sync/auto-sync', { interval_hours: interval });

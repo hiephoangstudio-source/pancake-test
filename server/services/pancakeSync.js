@@ -192,6 +192,7 @@ export async function syncPageData(pageId, accessToken, daysBack = 30) {
                     customer_pancake_id: String(customerId), user_pancake_id: userId,
                     date: dateStr, snippet: (conv.snippet || '').substring(0, 200),
                     tags, page_id: pageId,
+                    is_read: conv.read !== undefined ? !!conv.read : true,
                 });
                 totalConvs++;
             }
@@ -207,12 +208,12 @@ export async function syncPageData(pageId, accessToken, daysBack = 30) {
                 await client.query('BEGIN');
                 for (const c of convBatch) {
                     await client.query(`
-            INSERT INTO conversations (pancake_id, type, customer_pancake_id, user_pancake_id, date, snippet, tags, page_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO conversations (pancake_id, type, customer_pancake_id, user_pancake_id, date, snippet, tags, page_id, is_read)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             ON CONFLICT (pancake_id) DO UPDATE SET
               type = EXCLUDED.type, user_pancake_id = EXCLUDED.user_pancake_id,
-              snippet = EXCLUDED.snippet, tags = EXCLUDED.tags, updated_at = NOW()
-          `, [c.pancake_id, c.type, c.customer_pancake_id, c.user_pancake_id, c.date, c.snippet, JSON.stringify(c.tags), c.page_id]);
+              snippet = EXCLUDED.snippet, tags = EXCLUDED.tags, is_read = EXCLUDED.is_read, updated_at = NOW()
+          `, [c.pancake_id, c.type, c.customer_pancake_id, c.user_pancake_id, c.date, c.snippet, JSON.stringify(c.tags), c.page_id, c.is_read]);
                 }
                 await client.query('COMMIT');
             } catch (e) { await client.query('ROLLBACK'); throw e; }
@@ -505,6 +506,7 @@ export async function deltaSyncAllPages() {
                         snippet: (conv.snippet || '').substring(0, 200),
                         tags,
                         page_id: page.page_id,
+                        is_read: conv.read !== undefined ? !!conv.read : true,
                     });
 
                     if (customer) {
@@ -535,12 +537,12 @@ export async function deltaSyncAllPages() {
                     await client.query('BEGIN');
                     for (const c of convBatch) {
                         await client.query(`
-                            INSERT INTO conversations (pancake_id, type, customer_pancake_id, user_pancake_id, date, snippet, tags, page_id)
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                            INSERT INTO conversations (pancake_id, type, customer_pancake_id, user_pancake_id, date, snippet, tags, page_id, is_read)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                             ON CONFLICT (pancake_id) DO UPDATE SET
                               type = EXCLUDED.type, user_pancake_id = EXCLUDED.user_pancake_id,
-                              snippet = EXCLUDED.snippet, tags = EXCLUDED.tags, updated_at = NOW()
-                        `, [c.pancake_id, c.type, c.customer_pancake_id, c.user_pancake_id, c.date, c.snippet, JSON.stringify(c.tags), c.page_id]);
+                              snippet = EXCLUDED.snippet, tags = EXCLUDED.tags, is_read = EXCLUDED.is_read, updated_at = NOW()
+                        `, [c.pancake_id, c.type, c.customer_pancake_id, c.user_pancake_id, c.date, c.snippet, JSON.stringify(c.tags), c.page_id, c.is_read]);
                     }
                     await client.query('COMMIT');
                 } catch (e) { await client.query('ROLLBACK'); throw e; }

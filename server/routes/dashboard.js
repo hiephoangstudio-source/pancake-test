@@ -706,7 +706,7 @@ router.get('/conversations', async (req, res) => {
             LEFT JOIN customers cust ON cust.pancake_id = c.customer_pancake_id
             LEFT JOIN pages p ON p.page_id = c.page_id
             WHERE c.date IS NOT NULL ${where}
-            ORDER BY c.updated_at DESC NULLS LAST, c.date DESC
+            ORDER BY c.date DESC NULLS LAST
             LIMIT $${idx} OFFSET $${idx + 1}
         `;
         params.push(lim, off);
