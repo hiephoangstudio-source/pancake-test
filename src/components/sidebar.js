@@ -5,6 +5,7 @@ const MENU = [
     { id: 'staff', label: 'Nhân viên', icon: 'user-check', href: '/?page=staff' },
     { id: 'channels', label: 'Hiệu quả kênh QC', icon: 'megaphone', href: '/?page=channels' },
     { id: 'customers', label: 'Khách hàng', icon: 'users', href: '/?page=customers' },
+    { id: 'conversations', label: 'Hội thoại', icon: 'message-circle', href: '/?page=conversations' },
     { id: 'orders', label: 'Đơn đã chốt', icon: 'shopping-cart', href: '/?page=orders' },
     { id: 'tags', label: 'Báo cáo Tags', icon: 'tag', href: '/?page=tags' },
     { section: 'HỆ THỐNG' },

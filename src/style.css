@@ -502,3 +502,108 @@ tr.clickable:hover { background: var(--blue-light); }
     .conv-list { width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 40%; }
     .conv-modal-body { flex-direction: column; }
 }
+
+/* ─── CRM 3-Column Layout ─────────────── */
+.crm-layout {
+    display: flex; height: calc(100vh - 112px); gap: 0;
+    background: var(--bg); border-radius: var(--radius-lg); overflow: hidden;
+    border: 1px solid var(--border);
+}
+.crm-sidebar {
+    width: 300px; flex-shrink: 0; background: var(--bg-card);
+    border-right: 1px solid var(--border); display: flex; flex-direction: column;
+}
+.crm-sidebar-search {
+    padding: 12px; border-bottom: 1px solid var(--border);
+    display: flex; gap: 8px;
+}
+.crm-sidebar-search input {
+    flex: 1; padding: 8px 12px; border: 1px solid var(--border);
+    border-radius: var(--radius); font-size: 12px; outline: none;
+    font-family: var(--font);
+}
+.crm-sidebar-search input:focus { border-color: var(--blue); }
+.crm-sidebar-list { flex: 1; overflow-y: auto; }
+.crm-contact {
+    padding: 12px 16px; cursor: pointer; border-bottom: 1px solid var(--border-light);
+    transition: all 0.15s; display: flex; gap: 10px; align-items: flex-start;
+}
+.crm-contact:hover { background: #F8FAFC; }
+.crm-contact.active { background: var(--blue-light); border-left: 3px solid var(--blue); }
+.crm-contact-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, #3B82F6, #8B5CF6);
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 13px; font-weight: 700; flex-shrink: 0;
+}
+.crm-contact-info { flex: 1; min-width: 0; }
+.crm-contact-name {
+    font-size: 13px; font-weight: 600; color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.crm-contact-snippet {
+    font-size: 11px; color: var(--text-muted); margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.crm-contact-meta { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+.crm-contact-time { font-size: 10px; color: var(--text-muted); flex-shrink: 0; margin-top: 2px; }
+.crm-chat {
+    flex: 1; display: flex; flex-direction: column; background: #FAFBFC;
+}
+.crm-chat-header {
+    padding: 12px 16px; background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+}
+.crm-chat-messages { flex: 1; overflow-y: auto; padding: 16px; }
+.crm-profile {
+    width: 280px; flex-shrink: 0; background: var(--bg-card);
+    border-left: 1px solid var(--border); overflow-y: auto; padding: 16px;
+}
+.crm-profile-section { margin-bottom: 16px; }
+.crm-profile-label {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    color: var(--text-muted); letter-spacing: 0.05em; margin-bottom: 8px;
+}
+.crm-profile-value { font-size: 13px; color: var(--text-primary); }
+.crm-profile-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.crm-profile-tags .tag { cursor: pointer; transition: opacity 0.15s; }
+.crm-profile-tags .tag:hover { opacity: 0.7; }
+.crm-tag-add {
+    display: inline-flex; align-items: center; gap: 2px; padding: 2px 8px;
+    border-radius: 100px; font-size: 11px; background: var(--border-light);
+    color: var(--text-muted); cursor: pointer; border: 1px dashed var(--border);
+}
+.crm-tag-add:hover { background: var(--blue-light); color: var(--blue); border-color: var(--blue); }
+
+@media (max-width: 1200px) {
+    .crm-profile { display: none; }
+}
+@media (max-width: 768px) {
+    .crm-layout { flex-direction: column; height: auto; }
+    .crm-sidebar { width: 100%; max-height: 40vh; }
+    .crm-chat { min-height: 50vh; }
+}
+
+/* ─── Campaign Comparison ─────────────── */
+.campaign-row-bar {
+    height: 6px; border-radius: 100px; background: var(--blue);
+    transition: width 0.5s ease;
+}
+.metric-good { color: var(--green); font-weight: 600; }
+.metric-bad { color: var(--red); font-weight: 600; }
+.metric-neutral { color: var(--text-primary); }
+
+/* ─── Tag Summary Bars ────────────────── */
+.tag-bar-chart { display: flex; flex-direction: column; gap: 8px; }
+.tag-bar-row { display: flex; align-items: center; gap: 10px; }
+.tag-bar-label { width: 130px; font-size: 12px; color: var(--text-secondary); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tag-bar-track { flex: 1; height: 22px; background: var(--bg); border-radius: var(--radius); overflow: hidden; }
+.tag-bar-fill {
+    height: 100%; border-radius: var(--radius);
+    display: flex; align-items: center; padding: 0 8px;
+    font-size: 11px; font-weight: 600; color: white;
+    transition: width 0.5s ease;
+    min-width: fit-content;
+}
+.tag-bar-count { font-size: 12px; font-weight: 700; width: 50px; text-align: right; color: var(--text-primary); }

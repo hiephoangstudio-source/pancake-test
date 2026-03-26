@@ -13,6 +13,7 @@ const PAGES = {
     orders: () => import('./pages/orders.js'),
     settings: () => import('./pages/settings.js'),
     tags: () => import('./pages/tags.js'),
+    conversations: () => import('./pages/conversations.js'),
 };
 
 let currentPage = null;

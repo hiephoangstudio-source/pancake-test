@@ -36,6 +36,10 @@ export async function render(container, { tagMap }) {
 
     container.innerHTML = `
         <div id="ch-kpis" class="kpi-grid" style="margin-bottom:12px"></div>
+        <div class="card" style="margin-bottom:12px" id="campaign-comparison-card">
+            <div class="chart-title"><i data-lucide="bar-chart-3"></i> So sánh hiệu suất theo Page</div>
+            <div id="campaign-comparison" style="margin-top:8px;overflow-x:auto">Đang tải...</div>
+        </div>
         <div class="card">
             <div class="chart-title"><i data-lucide="list"></i> Danh sách chiến dịch QC</div>
             <table class="data-table" id="campaigns-table">
@@ -138,6 +142,12 @@ async function fetchChannels() {
             if (window.lucide) window.lucide.createIcons();
         }
 
+        // Campaign Comparison table (per-page aggregation)
+        try {
+            const campaignData = await apiGet('/stats/campaigns');
+            renderCampaignComparison('campaign-comparison', campaignData);
+        } catch { /* non-blocking */ }
+
         // Campaigns table
         const tbody = document.getElementById('campaigns-body');
         if (tbody) {
@@ -177,4 +187,58 @@ async function fetchChannels() {
     } catch (err) {
         console.error('Lỗi tải kênh QC:', err);
     }
+}
+
+function renderCampaignComparison(containerId, data) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+
+    if (!Array.isArray(data) || data.length === 0) {
+        el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:16px">Chưa có dữ liệu so sánh</div>';
+        return;
+    }
+
+    const maxSpend = Math.max(...data.map(d => Number(d.total_spend || 0)));
+    const cpls = data.map(d => Number(d.cpl || 0)).filter(v => v > 0);
+    const minCpl = cpls.length > 0 ? Math.min(...cpls) : 0;
+    const maxCpl = cpls.length > 0 ? Math.max(...cpls) : 0;
+
+    let html = `<table class="data-table">
+        <thead><tr>
+            <th>Page</th>
+            <th class="text-right">Ads</th>
+            <th class="text-right">Chi phí</th>
+            <th style="min-width:100px"></th>
+            <th class="text-right">Impressions</th>
+            <th class="text-right">Clicks</th>
+            <th class="text-right">CTR</th>
+            <th class="text-right">Conversations</th>
+            <th class="text-right">SĐT</th>
+            <th class="text-right">CPL</th>
+            <th class="text-right">Tỷ lệ CV</th>
+        </tr></thead><tbody>`;
+
+    for (const d of data) {
+        const spend = Number(d.total_spend || 0);
+        const barPct = maxSpend > 0 ? (spend / maxSpend * 100) : 0;
+        const cpl = Number(d.cpl || 0);
+        const cplClass = cpl > 0 ? (cpl <= minCpl ? 'metric-good' : cpl >= maxCpl ? 'metric-bad' : 'metric-neutral') : 'metric-neutral';
+
+        html += `<tr>
+            <td style="font-weight:600;white-space:nowrap">${d.page_name || d.page_id}</td>
+            <td class="text-right">${fmtNumber(d.ad_count)}</td>
+            <td class="text-right" style="font-weight:600">${fmtMoney(spend)}</td>
+            <td><div class="campaign-row-bar" style="width:${barPct}%"></div></td>
+            <td class="text-right">${fmtNumber(d.total_impressions)}</td>
+            <td class="text-right">${fmtNumber(d.total_clicks)}</td>
+            <td class="text-right">${d.ctr || 0}%</td>
+            <td class="text-right">${fmtNumber(d.total_conversations)}</td>
+            <td class="text-right">${fmtNumber(d.total_phones)}</td>
+            <td class="text-right ${cplClass}">${cpl > 0 ? fmtMoney(cpl) : '—'}</td>
+            <td class="text-right">${d.conversion_rate || 0}%</td>
+        </tr>`;
+    }
+
+    html += '</tbody></table>';
+    el.innerHTML = html;
 }
