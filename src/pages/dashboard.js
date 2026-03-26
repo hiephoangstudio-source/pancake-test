@@ -183,8 +183,9 @@ async function fetchAndRender(container, tagMap) {
         const customers = await apiGet(custUrl);
         const custData = customers.data || [];
 
-        // ─── Fetch Staff Tag Stats directly from Backend ───
-        const staffTagStats = await apiGet('/dashboard/staff-tag-stats').catch(() => ({}));
+        let staffTagUrl = `/dashboard/staff-tag-stats?from=${from}&to=${to}`;
+        if (pageId) staffTagUrl += `&pageId=${pageId}`;
+        const staffTagStats = await apiGet(staffTagUrl).catch(() => ({}));
 
         // ─── Staff Performance Table (from daily_reports + new API stats) ───
         renderStaffTable(staffData, staffTagStats, tagMap, staffFilter);

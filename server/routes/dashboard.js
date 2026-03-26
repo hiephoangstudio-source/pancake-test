@@ -1009,23 +1009,46 @@ router.get('/customer-kpis', async (req, res) => {
  */
 router.get('/staff-tag-stats', async (req, res) => {
     try {
-        const cached = getCached('dash_staff_tag_stats');
+        const { from, to, pageId } = req.query;
+
+        // Build dynamic WHERE conditions for conversations
+        let dateFilter = '';
+        let pageFilter = '';
+        const params = [];
+        let idx = 1;
+        if (from && to) {
+            dateFilter = `AND conv.date BETWEEN $${idx} AND $${idx + 1}`;
+            params.push(from, to);
+            idx += 2;
+        }
+        if (pageId) {
+            pageFilter = `AND conv.page_id = $${idx}`;
+            params.push(pageId);
+            idx++;
+        }
+
+        const cacheKey = `dash_staff_tag_stats_${from}_${to}_${pageId || 'all'}`;
+        const cached = getCached(cacheKey);
         if (cached) return res.json(cached);
 
+        // Join customers → conversations to filter by date/page
         const sql = `
             SELECT
               s.tag_name AS staff_tag,
               s.display_name AS staff_name,
-              COUNT(DISTINCT c.pancake_id) FILTER(WHERE c.tags::text ~* 'ký|kí|chốt|cọc') AS signed,
-              COUNT(DISTINCT c.pancake_id) FILTER(WHERE c.tags::text ~* 'hẹn đến|đã đến') AS visiting,
-              COUNT(DISTINCT c.pancake_id) FILTER(WHERE c.tags::text ILIKE '%sai đối tượng%') AS wrong
-            FROM customers c
+              COUNT(DISTINCT conv.pancake_id) FILTER(WHERE conv.tags::text ~* 'ký|kí|chốt|cọc') AS signed,
+              COUNT(DISTINCT conv.pancake_id) FILTER(WHERE conv.tags::text ~* 'hẹn đến|đã đến') AS visiting,
+              COUNT(DISTINCT conv.pancake_id) FILTER(WHERE conv.tags::text ILIKE '%sai đối tượng%') AS wrong
+            FROM conversations conv
+            JOIN customers c ON c.pancake_id = conv.customer_pancake_id
             CROSS JOIN jsonb_array_elements_text(c.tags) AS t_val
             JOIN tag_classifications s ON s.category = 'staff' AND s.tag_name ILIKE t_val
             WHERE c.tags IS NOT NULL AND jsonb_array_length(c.tags) > 0
+              ${dateFilter}
+              ${pageFilter}
             GROUP BY s.tag_name, s.display_name
         `;
-        const { rows } = await query(sql);
+        const { rows } = await query(sql, params);
         const result = {};
         for (const r of rows) {
             result[r.staff_name.toLowerCase()] = {
@@ -1034,7 +1057,7 @@ router.get('/staff-tag-stats', async (req, res) => {
                 wrong: parseInt(r.wrong) || 0
             };
         }
-        setCache('dash_staff_tag_stats', result, 60_000);
+        setCache(cacheKey, result, 60_000);
         res.json(result);
     } catch (err) {
         console.error('Staff tag stats error:', err);
