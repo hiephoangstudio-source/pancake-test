@@ -650,6 +650,66 @@ router.get('/tag-counts', async (req, res) => {
 });
 
 /**
+ * GET /api/dashboard/conversations
+ * List conversations for CRM panel (with customer info, tags, staff).
+ * Query: ?search=x&page_id=x&tag=x&limit=50
+ */
+router.get('/conversations', async (req, res) => {
+    try {
+        const { search, page_id, tag, limit = 50 } = req.query;
+        const lim = Math.min(200, Math.max(1, parseInt(limit)));
+
+        let conditions = [];
+        let params = [];
+        let idx = 1;
+
+        if (search) {
+            conditions.push(`(cust.name ILIKE $${idx} OR cust.phone ILIKE $${idx})`);
+            params.push(`%${search}%`);
+            idx++;
+        }
+        if (page_id) {
+            conditions.push(`c.page_id = $${idx}`);
+            params.push(page_id);
+            idx++;
+        }
+        if (tag) {
+            conditions.push(`c.tags::text ILIKE $${idx}`);
+            params.push(`%${tag}%`);
+            idx++;
+        }
+
+        const where = conditions.length > 0 ? 'AND ' + conditions.join(' AND ') : '';
+
+        const sql = `
+            SELECT c.pancake_id, c.type, c.date, c.snippet, c.tags,
+                   c.user_pancake_id, c.page_id, c.customer_pancake_id,
+                   c.updated_at, 0 AS total_messages,
+                   COALESCE(u.name, c.user_pancake_id) AS user_name,
+                   COALESCE(cust.name, 'Khách hàng') AS customer_name,
+                   cust.phone
+            FROM conversations c
+            LEFT JOIN users u ON u.pancake_id = c.user_pancake_id
+            LEFT JOIN customers cust ON cust.pancake_id = c.customer_pancake_id
+            WHERE c.date IS NOT NULL ${where}
+            ORDER BY c.updated_at DESC NULLS LAST, c.date DESC
+            LIMIT $${idx}
+        `;
+        params.push(lim);
+
+        const { rows } = await query(sql, params);
+        const result = rows.map(r => ({
+            ...r,
+            tags: typeof r.tags === 'string' ? JSON.parse(r.tags) : (r.tags || []),
+        }));
+        res.json(result);
+    } catch (err) {
+        console.error('Conversations list error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
  * GET /api/dashboard/customer/:id/conversations
  * Return conversation history for a specific customer.
  */

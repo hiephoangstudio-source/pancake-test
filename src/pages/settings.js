@@ -163,7 +163,7 @@ async function loadPages() {
         var el = document.getElementById('pages-list');
         if (!el) return;
         if (pages.length === 0) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Chưa có trang nào</div>'; return; }
-        var html = '<table class="data-table"><thead><tr><th>Tên</th><th>ID</th><th>Token</th><th style="width:40px"></th></tr></thead><tbody>';
+        var html = '<table class="data-table"><thead><tr><th>Tên</th><th>ID</th><th>Token</th><th style="width:70px"></th></tr></thead><tbody>';
         for (var i = 0; i < pages.length; i++) {
             var p = pages[i];
             var isLong = p.page_id.length > 16;
@@ -171,13 +171,16 @@ async function loadPages() {
             html += '<td style="font-weight:600" class="page-name-cell">' + p.name + '</td>';
             html += '<td style="font-size:11px;color:var(--text-muted)">' + (isLong ? p.page_id.substring(0,16)+'...' : p.page_id) + '</td>';
             html += '<td style="font-size:11px">' + (p._hasToken ? '✅' : '❌') + '</td>';
-            html += '<td><button class="btn-icon btn-icon-sm edit-page-btn" title="Sửa tên"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button></td>';
+            html += '<td style="display:flex;gap:2px">';
+            html += '<button class="btn-icon btn-icon-sm edit-page-btn" title="Sửa tên"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.85 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></button>';
+            html += '<button class="btn-icon btn-icon-sm update-token-btn" title="Cập nhật Token" style="color:var(--orange)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></button>';
+            html += '</td>';
             html += '</tr>';
         }
         html += '</tbody></table>';
         el.innerHTML = html;
 
-        // Bind edit handlers
+        // Bind edit name handlers
         el.querySelectorAll('.edit-page-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 var row = btn.closest('tr');
@@ -196,6 +199,31 @@ async function loadPages() {
                 };
                 inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') save(); if (e.key === 'Escape') loadPages(); });
                 inp.addEventListener('blur', save);
+            });
+        });
+
+        // Bind update token handlers
+        el.querySelectorAll('.update-token-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var row = btn.closest('tr');
+                var pid = row.dataset.pageId;
+                var name = row.dataset.pageName;
+                var cell = row.querySelector('.page-name-cell');
+                cell.innerHTML = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Token mới cho ' + name + ':</div><input class="inline-edit-input" type="password" placeholder="Dán page_access_token..." style="font-family:monospace;font-size:11px" />';
+                var inp = cell.querySelector('input');
+                inp.focus();
+                var save = async function() {
+                    var newToken = inp.value.trim();
+                    if (newToken) {
+                        try {
+                            await apiPost('/pages', { page_id: pid, name: name, access_token: newToken });
+                            toastSuccess('✅ Token đã cập nhật cho ' + name);
+                        } catch(e) { toastError(e.message); }
+                    }
+                    await loadPages();
+                };
+                inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') save(); if (e.key === 'Escape') loadPages(); });
+                inp.addEventListener('blur', function() { setTimeout(loadPages, 200); });
             });
         });
     } catch (err) { console.error(err); }
