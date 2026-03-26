@@ -114,8 +114,10 @@ def deploy_backend(client, db_url):
     env_content = f"""# 2H Studio Dashboard — Server Environment
 DATABASE_URL={db_url}
 API_PORT=3001
-JWT_SECRET=2hstudio-jwt-secret-{int(time.time())}
+JWT_SECRET=2hstudio-jwt-secret-1774273744
+ENCRYPTION_KEY=2hstudio-encryption-key-v2-2026
 NODE_ENV=production
+PANCAKE_MASTER_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1lIjoiSGnhu4dwIEhvw6BuZyIsImV4cCI6MTc4MTMxNzcxMywiYXBwbGljYXRpb24iOjEsInVpZCI6ImY5ZjM2N2ViLTI1YTAtNGEwMy1iNDBmLWU4YmI1NDE4YThhNyIsInNlc3Npb25faWQiOiJhZDlmMGUzMy0zMjkxLTRhMWYtYWRhMS1kMTAwNDU0ZjAyOWUiLCJpYXQiOjE3NzM1NDE3MTMsImZiX2lkIjoiNzAzMzIzMTA2NDgyMDA0IiwibG9naW5fc2Vzc2lvbiI6bnVsbCwiZmJfbmFtZSI6Ikhp4buHcCBIb8OgbmcifQ.fx6KIPjEVIu_srQ-vCk7rEnCeMK2DHw-TabV0oX1wyw
 """
     run(client, f"cat > {APP_DIR}/.env << 'ENVEOF'\n{env_content}ENVEOF")
     print("✅ .env created")

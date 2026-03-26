@@ -15,6 +15,7 @@ import webhookRoutes from './routes/webhook.js';
 import statsRoutes from './routes/stats.js';
 import ordersRoutes from './routes/orders.js';
 import tagConfigRoutes from './routes/tagConfig.js';
+import crmRoutes from './routes/crm.js';
 
 const app = express();
 const PORT = process.env.API_PORT || 3001;
@@ -82,6 +83,7 @@ app.use('/api/webhook', webhookRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/tag-config', tagConfigRoutes);
+app.use('/api/crm', crmRoutes);
 
 // ── Server-side cache for hot queries ──────
 export const queryCache = new Map();

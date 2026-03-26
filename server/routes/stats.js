@@ -150,4 +150,184 @@ router.get('/users/hourly', async (req, res) => {
     }
 });
 
+/**
+ * GET /api/stats/tags — Tag usage over time
+ * Query: ?from=YYYY-MM-DD&to=YYYY-MM-DD&page_id=xxx&category=lifecycle
+ */
+router.get('/tags', async (req, res) => {
+    try {
+        const { from, to, page_id, category } = req.query;
+        if (!from || !to) return res.status(400).json({ error: 'from and to required' });
+
+        let sql = `
+            SELECT tag_val AS tag_name, c.date,
+                   COUNT(*) AS count,
+                   tc.display_name, tc.category, tc.color, tc.sort_order
+            FROM conversations c,
+                 jsonb_array_elements_text(c.tags) AS tag_val
+            LEFT JOIN tag_classifications tc ON LOWER(tc.tag_name) = LOWER(tag_val)
+            WHERE c.date::date >= $1::date AND c.date::date <= $2::date
+              AND jsonb_array_length(c.tags) > 0
+        `;
+        const params = [from, to];
+
+        if (page_id) {
+            sql += ` AND c.page_id = $${params.length + 1}`;
+            params.push(page_id);
+        }
+        if (category) {
+            sql += ` AND tc.category = $${params.length + 1}`;
+            params.push(category);
+        }
+
+        sql += ` GROUP BY tag_val, c.date, tc.display_name, tc.category, tc.color, tc.sort_order
+                 ORDER BY count DESC, c.date ASC`;
+
+        const { rows } = await query(sql, params);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /api/stats/tags/funnel — Lifecycle tag funnel
+ * Query: ?from=YYYY-MM-DD&to=YYYY-MM-DD&page_id=xxx
+ */
+router.get('/tags/funnel', async (req, res) => {
+    try {
+        const { from, to, page_id } = req.query;
+        if (!from || !to) return res.status(400).json({ error: 'from and to required' });
+
+        let sql = `
+            SELECT tc.display_name, tc.tag_name, tc.color, tc.sort_order,
+                   COUNT(DISTINCT c.id) AS count
+            FROM conversations c,
+                 jsonb_array_elements_text(c.tags) AS tag_val
+            JOIN tag_classifications tc ON LOWER(tc.tag_name) = LOWER(tag_val)
+            WHERE tc.category = 'lifecycle'
+              AND c.date::date >= $1::date AND c.date::date <= $2::date
+        `;
+        const params = [from, to];
+
+        if (page_id) {
+            sql += ` AND c.page_id = $${params.length + 1}`;
+            params.push(page_id);
+        }
+
+        sql += ` GROUP BY tc.display_name, tc.tag_name, tc.color, tc.sort_order
+                 ORDER BY tc.sort_order ASC`;
+
+        const { rows } = await query(sql, params);
+
+        // Calculate conversion rates between funnel stages
+        const total = rows.reduce((sum, r) => sum + parseInt(r.count), 0);
+        const funnel = rows.map(r => ({
+            ...r,
+            count: parseInt(r.count),
+            percentage: total > 0 ? Math.round(parseInt(r.count) / total * 1000) / 10 : 0,
+        }));
+
+        res.json({ stages: funnel, total });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /api/stats/tags/summary — Tag usage summary (totals per tag)
+ * Query: ?from=YYYY-MM-DD&to=YYYY-MM-DD&page_id=xxx
+ */
+router.get('/tags/summary', async (req, res) => {
+    try {
+        const { from, to, page_id } = req.query;
+        if (!from || !to) return res.status(400).json({ error: 'from and to required' });
+
+        let sql = `
+            SELECT tag_val AS tag_name,
+                   COUNT(*) AS count,
+                   tc.display_name, tc.category, tc.color
+            FROM conversations c,
+                 jsonb_array_elements_text(c.tags) AS tag_val
+            LEFT JOIN tag_classifications tc ON LOWER(tc.tag_name) = LOWER(tag_val)
+            WHERE c.date::date >= $1::date AND c.date::date <= $2::date
+              AND jsonb_array_length(c.tags) > 0
+        `;
+        const params = [from, to];
+
+        if (page_id) {
+            sql += ` AND c.page_id = $${params.length + 1}`;
+            params.push(page_id);
+        }
+
+        sql += ` GROUP BY tag_val, tc.display_name, tc.category, tc.color
+                 ORDER BY count DESC`;
+
+        const { rows } = await query(sql, params);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /api/stats/campaigns — Campaign-level performance metrics
+ * Query: ?page_id=xxx&status=ACTIVE&sort=spend
+ */
+router.get('/campaigns', async (req, res) => {
+    try {
+        const { page_id, status, sort = 'spend' } = req.query;
+
+        let conditions = [];
+        let params = [];
+
+        if (page_id) {
+            conditions.push(`ch.page_id = $${params.length + 1}`);
+            params.push(page_id);
+        }
+        if (status) {
+            conditions.push(`ch.status = $${params.length + 1}`);
+            params.push(status);
+        }
+
+        const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+        const validSorts = ['spend', 'impressions', 'clicks', 'conversations', 'phones', 'cpl'];
+        const orderBy = validSorts.includes(sort) ? sort : 'spend';
+
+        const sql = `
+            SELECT ch.page_id,
+                   COALESCE(pg.name, ch.page_id) AS page_name,
+                   COUNT(*) AS ad_count,
+                   SUM(ch.spend) AS total_spend,
+                   SUM(ch.impressions) AS total_impressions,
+                   SUM(ch.clicks) AS total_clicks,
+                   SUM(ch.conversations) AS total_conversations,
+                   SUM(ch.phones) AS total_phones,
+                   CASE WHEN SUM(ch.impressions) > 0
+                        THEN ROUND(SUM(ch.clicks)::numeric / SUM(ch.impressions) * 100, 2)
+                        ELSE 0 END AS ctr,
+                   CASE WHEN SUM(ch.clicks) > 0
+                        THEN ROUND(SUM(ch.spend) / SUM(ch.clicks), 0)
+                        ELSE 0 END AS cpc,
+                   CASE WHEN SUM(ch.phones) > 0
+                        THEN ROUND(SUM(ch.spend) / SUM(ch.phones), 0)
+                        ELSE 0 END AS cpl,
+                   CASE WHEN SUM(ch.conversations) > 0
+                        THEN ROUND(SUM(ch.phones)::numeric / SUM(ch.conversations) * 100, 1)
+                        ELSE 0 END AS conversion_rate
+            FROM channels ch
+            LEFT JOIN pages pg ON pg.page_id = ch.page_id
+            ${where}
+            GROUP BY ch.page_id, pg.name
+            ORDER BY ${orderBy === 'cpl' ? 'cpl' : `total_${orderBy}`} DESC
+        `;
+
+        const { rows } = await query(sql, params);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 export default router;
