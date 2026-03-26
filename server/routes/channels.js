@@ -61,26 +61,42 @@ router.get('/summary', async (req, res) => {
     try {
         const { pageId } = req.query;
         const where = pageId ? 'WHERE page_id = $1' : '';
+        const drWhere = pageId ? 'WHERE page_id = $1' : '';
         const params = pageId ? [pageId] : [];
 
-        const { rows: [summary] } = await query(`
+        // Channels table: ad metrics
+        const { rows: [adSummary] } = await query(`
       SELECT
         COUNT(*) AS total_ads,
         COALESCE(SUM(spend), 0) AS total_spend,
         COALESCE(SUM(impressions), 0) AS total_impressions,
         COALESCE(SUM(clicks), 0) AS total_clicks,
-        COALESCE(SUM(conversations), 0) AS total_conversations,
-        COALESCE(SUM(phones), 0) AS total_phones,
         CASE WHEN SUM(impressions) > 0 THEN ROUND(SUM(clicks)::numeric / SUM(impressions) * 100, 2) ELSE 0 END AS avg_ctr,
         CASE WHEN SUM(clicks) > 0 THEN ROUND(SUM(spend) / SUM(clicks), 0) ELSE 0 END AS avg_cpc,
-        CASE WHEN SUM(phones) > 0 THEN ROUND(SUM(spend) / SUM(phones), 0) ELSE 0 END AS avg_cpl,
-        CASE WHEN SUM(conversations) > 0 THEN ROUND(SUM(phones)::numeric / SUM(conversations) * 100, 1) ELSE 0 END AS avg_conversion_rate,
         COUNT(*) FILTER (WHERE status = 'ACTIVE') AS active_ads,
         COUNT(*) FILTER (WHERE status != 'ACTIVE') AS inactive_ads
       FROM channels ${where}
     `, params);
 
-        res.json(summary);
+        // daily_reports: conversation metrics
+        const { rows: [convSummary] } = await query(`
+      SELECT
+        COALESCE(SUM(conversations), 0) AS total_conversations,
+        COALESCE(SUM(has_phone), 0) AS total_phones
+      FROM daily_reports ${drWhere}
+    `, params);
+
+        const totalConv = Number(convSummary?.total_conversations || 0);
+        const totalPhones = Number(convSummary?.total_phones || 0);
+        const totalSpend = Number(adSummary?.total_spend || 0);
+
+        res.json({
+            ...adSummary,
+            total_conversations: totalConv,
+            total_phones: totalPhones,
+            avg_cpl: totalPhones > 0 ? Math.round(totalSpend / totalPhones) : 0,
+            avg_conversion_rate: totalConv > 0 ? Number((totalPhones / totalConv * 100).toFixed(1)) : 0,
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

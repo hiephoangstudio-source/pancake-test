@@ -306,9 +306,27 @@ async function loadMessages(convId, pageId, customer) {
         msgEl.innerHTML = `
             <div class="msg-list">
                 ${sorted.map(m => {
-                    const isPage = m.from?.type === 'page' || m.sender_type === 'page';
-                    const senderName = m.from?.name || (isPage ? 'Trang' : customer.name || 'Khách');
-                    const content = m.original_message || m.message || m.content || '';
+                    const isPage = String(m.from?.id) === String(pageId) || !!m.from?.admin_name || m.from?.type === 'page' || m.sender_type === 'page';
+                    const senderName = m.from?.admin_name || m.from?.name || (isPage ? 'Trang' : customer.name || 'Khách');
+                    let content = m.original_message || m.message || m.content || '';
+
+                    // Format system messages
+                    const systemMsgs = {
+                        '[ad_click]': '📣 Đến từ quảng cáo',
+                        '[ad_ref]': '📣 Referral từ QC',
+                        '[sticker]': '🎭 Sticker',
+                        '[photo]': '🖼️ Hình ảnh',
+                        '[video]': '🎬 Video',
+                        '[audio]': '🎵 Audio',
+                        '[file]': '📎 File đính kèm',
+                        '[like]': '👍',
+                    };
+                    const trimmed = content.trim().toLowerCase();
+                    const isSystem = systemMsgs[trimmed];
+                    if (isSystem) {
+                        return `<div class="msg-system" style="text-align:center;padding:4px 0;font-size:11px;color:var(--text-muted)"><span style="background:rgba(59,130,246,0.1);color:#3B82F6;padding:3px 10px;border-radius:100px;font-size:10px;font-weight:600">${isSystem}</span></div>`;
+                    }
+                    
                     return `
                         <div class="msg-bubble ${isPage ? 'msg-page' : 'msg-customer'}">
                             <div class="msg-sender">${senderName}</div>

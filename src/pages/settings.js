@@ -13,8 +13,8 @@ export async function render(container) {
     }
 
     container.innerHTML = ''
-        // Row 1: Users + Pages side by side
-        + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px" class="settings-grid">'
+        // Row 1: Users + Pages (2 cols)
+        + '<div class="settings-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">'
         + '<div class="card">'
         + '<div class="chart-title"><i data-lucide="users-2"></i> Quản lý nhân viên</div>'
         + '<div id="users-table" style="margin-top:8px;overflow-x:auto;max-height:360px;overflow-y:auto">Đang tải...</div>'
@@ -24,8 +24,8 @@ export async function render(container) {
         + '<div id="pages-list" style="margin-top:8px;overflow-x:auto;max-height:360px;overflow-y:auto">Đang tải...</div>'
         + '</div>'
         + '</div>'
-        // Row 2: Token + Sync + Auto-Sync
-        + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:16px" class="settings-grid">'
+        // Row 2: Token + Sync (2 cols)
+        + '<div class="settings-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">'
         + '<div class="card">'
         + '<div class="chart-title"><i data-lucide="key"></i> Master Token</div>'
         + '<div id="token-status" style="font-size:12px;margin:8px 0"></div>'
@@ -41,6 +41,9 @@ export async function render(container) {
         + '<div id="sync-custom-dates" style="display:none;gap:8px;margin-bottom:8px"><input type="date" id="sync-from" class="filter-select" /><span style="color:var(--text-muted)">→</span><input type="date" id="sync-to" class="filter-select" /></div>'
         + '<div id="sync-status" style="font-size:12px;color:var(--text-muted)"></div>'
         + '</div>'
+        + '</div>'
+        // Row 3: Smart Sync + Add Page (2 cols)
+        + '<div class="settings-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">'
         + '<div class="card">'
         + '<div class="chart-title"><i data-lucide="timer"></i> Smart Sync</div>'
         + '<div style="margin-top:8px">'
@@ -57,9 +60,6 @@ export async function render(container) {
         + '<button class="btn btn-primary" id="save-auto-sync-btn" style="width:100%"><i data-lucide="save"></i> Lưu lịch</button>'
         + '</div>'
         + '</div>'
-        + '</div>'
-        // Row 3: Add Page
-        + '<div style="display:grid;grid-template-columns:1fr;gap:16px;margin-top:16px;max-width:400px">'
         + '<div class="card">'
         + '<div class="chart-title"><i data-lucide="plus-circle"></i> Thêm trang mới</div>'
         + '<input id="new-page-id" placeholder="Page ID" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;margin-top:8px;margin-bottom:6px" />'

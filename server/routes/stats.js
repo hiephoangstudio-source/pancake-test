@@ -295,32 +295,46 @@ router.get('/campaigns', async (req, res) => {
         const validSorts = ['spend', 'impressions', 'clicks', 'conversations', 'phones', 'cpl'];
         const orderBy = validSorts.includes(sort) ? sort : 'spend';
 
+        // Join ad data (channels) with conversation data (daily_reports) per page
         const sql = `
-            SELECT ch.page_id,
-                   COALESCE(pg.name, ch.page_id) AS page_name,
-                   COUNT(*) AS ad_count,
-                   SUM(ch.spend) AS total_spend,
-                   SUM(ch.impressions) AS total_impressions,
-                   SUM(ch.clicks) AS total_clicks,
-                   SUM(ch.conversations) AS total_conversations,
-                   SUM(ch.phones) AS total_phones,
-                   CASE WHEN SUM(ch.impressions) > 0
-                        THEN ROUND(SUM(ch.clicks)::numeric / SUM(ch.impressions) * 100, 2)
+            WITH ad_stats AS (
+                SELECT ch.page_id,
+                       COALESCE(pg.name, ch.page_id) AS page_name,
+                       COUNT(*) AS ad_count,
+                       SUM(ch.spend) AS total_spend,
+                       SUM(ch.impressions) AS total_impressions,
+                       SUM(ch.clicks) AS total_clicks
+                FROM channels ch
+                LEFT JOIN pages pg ON pg.page_id = ch.page_id
+                ${where}
+                GROUP BY ch.page_id, pg.name
+            ),
+            conv_stats AS (
+                SELECT page_id,
+                       COALESCE(SUM(conversations), 0) AS total_conversations,
+                       COALESCE(SUM(has_phone), 0) AS total_phones
+                FROM daily_reports
+                GROUP BY page_id
+            )
+            SELECT a.page_id, a.page_name, a.ad_count,
+                   a.total_spend, a.total_impressions, a.total_clicks,
+                   COALESCE(c.total_conversations, 0) AS total_conversations,
+                   COALESCE(c.total_phones, 0) AS total_phones,
+                   CASE WHEN a.total_impressions > 0
+                        THEN ROUND(a.total_clicks::numeric / a.total_impressions * 100, 2)
                         ELSE 0 END AS ctr,
-                   CASE WHEN SUM(ch.clicks) > 0
-                        THEN ROUND(SUM(ch.spend) / SUM(ch.clicks), 0)
+                   CASE WHEN a.total_clicks > 0
+                        THEN ROUND(a.total_spend / a.total_clicks, 0)
                         ELSE 0 END AS cpc,
-                   CASE WHEN SUM(ch.phones) > 0
-                        THEN ROUND(SUM(ch.spend) / SUM(ch.phones), 0)
+                   CASE WHEN COALESCE(c.total_phones, 0) > 0
+                        THEN ROUND(a.total_spend / c.total_phones, 0)
                         ELSE 0 END AS cpl,
-                   CASE WHEN SUM(ch.conversations) > 0
-                        THEN ROUND(SUM(ch.phones)::numeric / SUM(ch.conversations) * 100, 1)
+                   CASE WHEN COALESCE(c.total_conversations, 0) > 0
+                        THEN ROUND(COALESCE(c.total_phones, 0)::numeric / c.total_conversations * 100, 1)
                         ELSE 0 END AS conversion_rate
-            FROM channels ch
-            LEFT JOIN pages pg ON pg.page_id = ch.page_id
-            ${where}
-            GROUP BY ch.page_id, pg.name
-            ORDER BY ${orderBy === 'cpl' ? 'cpl' : `total_${orderBy}`} DESC
+            FROM ad_stats a
+            LEFT JOIN conv_stats c ON c.page_id = a.page_id
+            ORDER BY ${orderBy === 'cpl' ? 'cpl' : orderBy === 'conversations' ? 'total_conversations' : orderBy === 'phones' ? 'total_phones' : `a.total_${orderBy}`} DESC
         `;
 
         const { rows } = await query(sql, params);
