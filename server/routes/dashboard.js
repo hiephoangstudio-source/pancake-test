@@ -651,20 +651,21 @@ router.get('/tag-counts', async (req, res) => {
 
 /**
  * GET /api/dashboard/conversations
- * List conversations for CRM panel (with customer info, tags, staff).
- * Query: ?search=x&page_id=x&tag=x&limit=50
+ * Enhanced: is_read filter, user filter, offset pagination, response time, page name.
+ * Query: ?search=x&page_id=x&tag=x&is_read=true|false&user_id=x&offset=0&limit=50
  */
 router.get('/conversations', async (req, res) => {
     try {
-        const { search, page_id, tag, limit = 50 } = req.query;
+        const { search, page_id, tag, is_read, user_id, offset = 0, limit = 50 } = req.query;
         const lim = Math.min(200, Math.max(1, parseInt(limit)));
+        const off = Math.max(0, parseInt(offset) || 0);
 
         let conditions = [];
         let params = [];
         let idx = 1;
 
         if (search) {
-            conditions.push(`(cust.name ILIKE $${idx} OR cust.phone ILIKE $${idx})`);
+            conditions.push(`(cust.name ILIKE $${idx} OR cust.phone ILIKE $${idx} OR c.snippet ILIKE $${idx})`);
             params.push(`%${search}%`);
             idx++;
         }
@@ -678,29 +679,48 @@ router.get('/conversations', async (req, res) => {
             params.push(`%${tag}%`);
             idx++;
         }
+        if (is_read === 'true') {
+            conditions.push(`c.is_read = TRUE`);
+        } else if (is_read === 'false') {
+            conditions.push(`c.is_read = FALSE`);
+        }
+        if (user_id) {
+            conditions.push(`c.user_pancake_id = $${idx}`);
+            params.push(user_id);
+            idx++;
+        }
 
         const where = conditions.length > 0 ? 'AND ' + conditions.join(' AND ') : '';
 
         const sql = `
             SELECT c.pancake_id, c.type, c.date, c.snippet, c.tags,
                    c.user_pancake_id, c.page_id, c.customer_pancake_id,
-                   c.updated_at, 0 AS total_messages,
+                   c.updated_at, c.is_read,
+                   c.last_customer_msg_at, c.last_page_msg_at, c.response_time_seconds,
                    COALESCE(u.name, c.user_pancake_id) AS user_name,
                    COALESCE(cust.name, 'Khách hàng') AS customer_name,
-                   cust.phone
+                   cust.phone,
+                   COALESCE(p.name, c.page_id) AS page_name
             FROM conversations c
             LEFT JOIN users u ON u.pancake_id = c.user_pancake_id
             LEFT JOIN customers cust ON cust.pancake_id = c.customer_pancake_id
+            LEFT JOIN pages p ON p.page_id = c.page_id
             WHERE c.date IS NOT NULL ${where}
             ORDER BY c.updated_at DESC NULLS LAST, c.date DESC
-            LIMIT $${idx}
+            LIMIT $${idx} OFFSET $${idx + 1}
         `;
-        params.push(lim);
+        params.push(lim, off);
 
         const { rows } = await query(sql, params);
+
+        // Calculate waiting time for pending responses
+        const now = Date.now();
         const result = rows.map(r => ({
             ...r,
             tags: typeof r.tags === 'string' ? JSON.parse(r.tags) : (r.tags || []),
+            waiting_minutes: r.last_customer_msg_at && (!r.last_page_msg_at || new Date(r.last_customer_msg_at) > new Date(r.last_page_msg_at))
+                ? Math.floor((now - new Date(r.last_customer_msg_at).getTime()) / 60000)
+                : null,
         }));
         res.json(result);
     } catch (err) {
@@ -708,6 +728,134 @@ router.get('/conversations', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+/**
+ * GET /api/dashboard/conversations/unread-count
+ * Returns count of unread conversations for sidebar badge.
+ */
+router.get('/conversations/unread-count', async (req, res) => {
+    try {
+        const { rows: [{ count }] } = await query('SELECT COUNT(*) AS count FROM conversations WHERE is_read = FALSE');
+        res.json({ count: parseInt(count) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /api/dashboard/conversations/response-stats
+ * Response time analytics per staff member.
+ * Returns avg response time, % under 5 min, % over 1 hour.
+ */
+router.get('/conversations/response-stats', async (req, res) => {
+    try {
+        const sql = `
+            SELECT
+                COALESCE(u.name, c.user_pancake_id) AS user_name,
+                c.user_pancake_id,
+                COUNT(*) FILTER(WHERE c.response_time_seconds IS NOT NULL) AS total_responded,
+                ROUND(AVG(c.response_time_seconds) FILTER(WHERE c.response_time_seconds IS NOT NULL) / 60) AS avg_minutes,
+                COUNT(*) FILTER(WHERE c.response_time_seconds IS NOT NULL AND c.response_time_seconds <= 300) AS under_5m,
+                COUNT(*) FILTER(WHERE c.response_time_seconds IS NOT NULL AND c.response_time_seconds > 3600) AS over_1h,
+                COUNT(*) FILTER(WHERE c.last_customer_msg_at IS NOT NULL AND (c.last_page_msg_at IS NULL OR c.last_customer_msg_at > c.last_page_msg_at)) AS pending
+            FROM conversations c
+            LEFT JOIN users u ON u.pancake_id = c.user_pancake_id
+            WHERE c.user_pancake_id IS NOT NULL AND c.user_pancake_id != ''
+            GROUP BY c.user_pancake_id, u.name
+            HAVING COUNT(*) FILTER(WHERE c.response_time_seconds IS NOT NULL) > 0
+            ORDER BY avg_minutes ASC NULLS LAST
+        `;
+        const { rows } = await query(sql);
+        res.json(rows.map(r => ({
+            ...r,
+            total_responded: parseInt(r.total_responded),
+            avg_minutes: parseInt(r.avg_minutes) || 0,
+            under_5m: parseInt(r.under_5m),
+            over_1h: parseInt(r.over_1h),
+            pending: parseInt(r.pending),
+        })));
+    } catch (err) {
+        console.error('Response stats error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * GET /api/dashboard/conversations/cross-page/:customerId
+ * Find conversations by the same customer across different pages.
+ * Matches by customer_pancake_id OR by phone number.
+ */
+router.get('/conversations/cross-page/:customerId', async (req, res) => {
+    try {
+        const { customerId } = req.params;
+
+        // 1. Get the customer's phone numbers for cross-matching
+        const { rows: [customer] } = await query(
+            'SELECT phone, phone_numbers, name FROM customers WHERE pancake_id = $1', [customerId]
+        );
+
+        // 2. Find conversations directly by customer_pancake_id
+        const { rows: directConvs } = await query(`
+            SELECT c.pancake_id, c.page_id, COALESCE(p.name, c.page_id) AS page_name,
+                   c.date, c.snippet, c.user_pancake_id,
+                   COALESCE(u.name, c.user_pancake_id) AS user_name
+            FROM conversations c
+            LEFT JOIN pages p ON p.page_id = c.page_id
+            LEFT JOIN users u ON u.pancake_id = c.user_pancake_id
+            WHERE c.customer_pancake_id = $1
+            ORDER BY c.updated_at DESC
+        `, [customerId]);
+
+        // 3. Try to find same person on OTHER pages via phone match
+        let phoneMatches = [];
+        const phones = [];
+        if (customer?.phone) phones.push(customer.phone);
+        try {
+            const pn = typeof customer?.phone_numbers === 'string' ? JSON.parse(customer.phone_numbers) : (customer?.phone_numbers || []);
+            if (Array.isArray(pn)) phones.push(...pn.filter(Boolean));
+        } catch {}
+
+        if (phones.length > 0) {
+            const phonePlaceholders = phones.map((_, i) => `$${i + 1}`).join(', ');
+            const { rows: otherCustomers } = await query(`
+                SELECT DISTINCT cust.pancake_id, cust.name, cust.page_id,
+                       COALESCE(p.name, cust.page_id) AS page_name
+                FROM customers cust
+                LEFT JOIN pages p ON p.page_id = cust.page_id
+                WHERE cust.pancake_id != $${phones.length + 1}
+                  AND (cust.phone IN (${phonePlaceholders}) OR cust.phone_numbers::text SIMILAR TO $${phones.length + 2})
+            `, [...phones, customerId, `%(${phones.join('|')})%`]);
+            phoneMatches = otherCustomers;
+        }
+
+        // 4. Deduplicate pages
+        const pageSet = new Set();
+        const allPages = [];
+        for (const c of directConvs) {
+            if (!pageSet.has(c.page_id)) {
+                pageSet.add(c.page_id);
+                allPages.push({ page_id: c.page_id, page_name: c.page_name });
+            }
+        }
+        for (const m of phoneMatches) {
+            if (!pageSet.has(m.page_id)) {
+                pageSet.add(m.page_id);
+                allPages.push({ page_id: m.page_id, page_name: m.page_name, via_phone: true });
+            }
+        }
+
+        res.json({
+            customer_name: customer?.name || 'Unknown',
+            pages: allPages,
+            conversations: directConvs,
+            phone_matches: phoneMatches,
+        });
+    } catch (err) {
+        console.error('Cross-page error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 
 /**
  * GET /api/dashboard/customer/:id/conversations

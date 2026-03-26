@@ -91,6 +91,13 @@ async function init() {
         });
     } catch { /* SSE not available */ }
 
+    // Unread badge polling
+    try {
+        const { updateUnreadBadge } = await import('./pages/conversations.js');
+        updateUnreadBadge();
+        setInterval(updateUnreadBadge, 30000);
+    } catch {}
+
     // Initial render
     navigate();
 }

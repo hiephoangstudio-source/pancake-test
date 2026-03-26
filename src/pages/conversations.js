@@ -3,10 +3,17 @@ import { fmtNumber, fmtDate } from '../utils/format.js';
 
 let activeConvId = null;
 let activePageId = null;
+let activeCustomerPancakeId = null;
+let currentOffset = 0;
+let isLoadingMore = false;
+let allLoaded = false;
+let staffList = [];
 
 export function destroy() {
     activeConvId = null;
     activePageId = null;
+    activeCustomerPancakeId = null;
+    currentOffset = 0;
 }
 
 export async function render(container, { tagMap }) {
@@ -21,6 +28,16 @@ export async function render(container, { tagMap }) {
             </div>
             <div class="filter-group"><i data-lucide="tag"></i>
                 <select class="filter-select" id="conv-tag-filter"><option value="">Tất cả tags</option></select>
+            </div>
+            <div class="filter-group"><i data-lucide="eye"></i>
+                <select class="filter-select" id="conv-read-filter">
+                    <option value="">Tất cả</option>
+                    <option value="false">🔵 Chưa đọc</option>
+                    <option value="true">Đã đọc</option>
+                </select>
+            </div>
+            <div class="filter-group"><i data-lucide="user"></i>
+                <select class="filter-select" id="conv-user-filter"><option value="">Tất cả NV</option></select>
             </div>`;
     }
 
@@ -28,7 +45,7 @@ export async function render(container, { tagMap }) {
         <div class="crm-layout">
             <div class="crm-sidebar">
                 <div class="crm-sidebar-search">
-                    <input type="text" id="crm-search" placeholder="Tìm tên, SĐT..." />
+                    <input type="text" id="crm-search" placeholder="Tìm tên, SĐT, nội dung..." />
                 </div>
                 <div class="crm-sidebar-list" id="crm-contact-list">
                     <div style="text-align:center;padding:40px;color:var(--text-muted)">
@@ -84,86 +101,174 @@ export async function render(container, { tagMap }) {
         }
     } catch {}
 
+    // Load staff for NV filter
+    try {
+        const users = await apiGet('/users');
+        staffList = users || [];
+        const sel = document.getElementById('conv-user-filter');
+        staffList.forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u.pancake_id;
+            opt.textContent = u.name || u.pancake_id;
+            sel?.appendChild(opt);
+        });
+    } catch {}
+
     // Bind search + filters
     let searchTimeout;
-    document.getElementById('crm-search')?.addEventListener('input', (e) => {
+    document.getElementById('crm-search')?.addEventListener('input', () => {
         clearTimeout(searchTimeout);
-        searchTimeout = setTimeout(() => loadConversations(), 300);
+        searchTimeout = setTimeout(() => resetAndLoad(), 300);
     });
-    document.getElementById('conv-page-filter')?.addEventListener('change', () => loadConversations());
-    document.getElementById('conv-tag-filter')?.addEventListener('change', () => loadConversations());
+    document.getElementById('conv-page-filter')?.addEventListener('change', resetAndLoad);
+    document.getElementById('conv-tag-filter')?.addEventListener('change', resetAndLoad);
+    document.getElementById('conv-read-filter')?.addEventListener('change', resetAndLoad);
+    document.getElementById('conv-user-filter')?.addEventListener('change', resetAndLoad);
 
-    await loadConversations();
+    // Infinite scroll
+    const listEl = document.getElementById('crm-contact-list');
+    listEl?.addEventListener('scroll', () => {
+        if (isLoadingMore || allLoaded) return;
+        if (listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 60) {
+            loadMoreConversations();
+        }
+    });
+
+    await resetAndLoad();
 }
 
-async function loadConversations() {
+function resetAndLoad() {
+    currentOffset = 0;
+    allLoaded = false;
+    loadConversations(true);
+}
+
+async function loadConversations(reset = false) {
     const listEl = document.getElementById('crm-contact-list');
     if (!listEl) return;
+
+    if (reset) {
+        listEl.innerHTML = '<div style="text-align:center;padding:20px"><div class="spinner"></div></div>';
+    }
 
     const search = document.getElementById('crm-search')?.value || '';
     const pageId = document.getElementById('conv-page-filter')?.value || '';
     const tagFilter = document.getElementById('conv-tag-filter')?.value || '';
-
-    listEl.innerHTML = '<div style="text-align:center;padding:20px"><div class="spinner"></div></div>';
+    const readFilter = document.getElementById('conv-read-filter')?.value || '';
+    const userFilter = document.getElementById('conv-user-filter')?.value || '';
 
     try {
-        let url = '/dashboard/conversations?limit=50';
+        let url = `/dashboard/conversations?limit=50&offset=${currentOffset}`;
         if (search) url += `&search=${encodeURIComponent(search)}`;
         if (pageId) url += `&page_id=${pageId}`;
         if (tagFilter) url += `&tag=${encodeURIComponent(tagFilter)}`;
+        if (readFilter) url += `&is_read=${readFilter}`;
+        if (userFilter) url += `&user_id=${userFilter}`;
 
         const convs = await apiGet(url);
         const data = Array.isArray(convs) ? convs : (convs.data || []);
 
-        if (data.length === 0) {
+        if (data.length < 50) allLoaded = true;
+
+        if (reset && data.length === 0) {
             listEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:12px">Không tìm thấy hội thoại</div>';
             return;
         }
 
-        listEl.innerHTML = data.map(c => {
-            const initial = (c.customer_name || 'K')[0].toUpperCase();
-            const tags = (c.tags || []).slice(0, 3);
-            const timeAgo = formatTimeAgo(c.updated_at || c.date);
-            return `
-                <div class="crm-contact" data-conv-id="${c.pancake_id}" data-page-id="${c.page_id}" data-customer="${escapeAttr(JSON.stringify({
-                    name: c.customer_name,
-                    phone: c.phone,
-                    id: c.pancake_id,
-                    page_id: c.page_id,
-                    user_name: c.user_name,
-                    tags: c.tags || [],
-                    snippet: c.snippet,
-                    total_messages: c.total_messages,
-                    date: c.date,
-                }))}">
-                    <div class="crm-contact-avatar">${initial}</div>
-                    <div class="crm-contact-info">
-                        <div class="crm-contact-name">${c.customer_name || 'Khách hàng'}</div>
-                        <div class="crm-contact-snippet">${stripHtml(c.snippet || '')}</div>
-                        <div class="crm-contact-meta">
-                            ${tags.map(t => `<span class="tag" style="font-size:9px">${t}</span>`).join('')}
-                        </div>
-                    </div>
-                    <div class="crm-contact-time">${timeAgo}</div>
-                </div>`;
-        }).join('');
+        const html = data.map(c => renderContact(c)).join('');
+        if (reset) {
+            listEl.innerHTML = html;
+        } else {
+            // Remove loading indicator and append
+            const loader = listEl.querySelector('.crm-load-more');
+            if (loader) loader.remove();
+            listEl.insertAdjacentHTML('beforeend', html);
+        }
 
-        // Bind click events
-        listEl.querySelectorAll('.crm-contact').forEach(el => {
-            el.addEventListener('click', () => {
-                listEl.querySelectorAll('.crm-contact').forEach(e => e.classList.remove('active'));
-                el.classList.add('active');
-                const customer = JSON.parse(el.dataset.customer);
-                activeConvId = el.dataset.convId;
-                activePageId = el.dataset.pageId;
-                loadMessages(activeConvId, activePageId, customer);
-                renderProfile(customer);
-            });
-        });
+        currentOffset += data.length;
+
+        // Bind click events on new items
+        bindContactClicks(listEl);
 
     } catch (err) {
-        listEl.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red);font-size:12px">${err.message}</div>`;
+        if (reset) {
+            listEl.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red);font-size:12px">${err.message}</div>`;
+        }
     }
+}
+
+async function loadMoreConversations() {
+    if (isLoadingMore || allLoaded) return;
+    isLoadingMore = true;
+    const listEl = document.getElementById('crm-contact-list');
+    listEl?.insertAdjacentHTML('beforeend', '<div class="crm-load-more" style="text-align:center;padding:12px"><div class="spinner" style="width:20px;height:20px"></div></div>');
+
+    await loadConversations(false);
+    isLoadingMore = false;
+}
+
+function renderContact(c) {
+    const initial = (c.customer_name || 'K')[0].toUpperCase();
+    const tags = (c.tags || []).slice(0, 2);
+    const timeAgo = formatTimeAgo(c.updated_at || c.date);
+    const isUnread = !c.is_read;
+    const waiting = c.waiting_minutes;
+
+    let waitingBadge = '';
+    if (waiting !== null && waiting !== undefined && waiting > 0) {
+        const waitClass = waiting > 60 ? 'wait-critical' : waiting > 15 ? 'wait-warning' : 'wait-ok';
+        const waitText = waiting > 60 ? `${Math.floor(waiting / 60)}h${waiting % 60}p` : `${waiting}p`;
+        waitingBadge = `<span class="crm-wait-badge ${waitClass}">⏳ ${waitText}</span>`;
+    }
+
+    return `
+        <div class="crm-contact ${isUnread ? 'crm-unread' : ''}" data-conv-id="${c.pancake_id}" data-page-id="${c.page_id}" data-cust-id="${c.customer_pancake_id}" data-is-read="${c.is_read}" data-customer="${escapeAttr(JSON.stringify({
+            name: c.customer_name,
+            phone: c.phone,
+            id: c.pancake_id,
+            customer_id: c.customer_pancake_id,
+            page_id: c.page_id,
+            page_name: c.page_name,
+            user_name: c.user_name,
+            tags: c.tags || [],
+            snippet: c.snippet,
+            date: c.date,
+            is_read: c.is_read,
+            waiting_minutes: c.waiting_minutes,
+            response_time_seconds: c.response_time_seconds,
+        }))}">
+            ${isUnread ? '<div class="crm-unread-dot"></div>' : ''}
+            <div class="crm-contact-avatar">${initial}</div>
+            <div class="crm-contact-info">
+                <div class="crm-contact-name">${c.customer_name || 'Khách hàng'}</div>
+                <div class="crm-contact-snippet">${stripHtml(c.snippet || '')}</div>
+                <div class="crm-contact-meta">
+                    ${c.page_name ? `<span class="tag tag-page" style="font-size:9px">${c.page_name}</span>` : ''}
+                    ${c.user_name ? `<span class="tag tag-staff" style="font-size:9px">${c.user_name}</span>` : ''}
+                    ${tags.map(t => `<span class="tag" style="font-size:9px">${t}</span>`).join('')}
+                </div>
+            </div>
+            <div class="crm-contact-time">
+                <div>${timeAgo}</div>
+                ${waitingBadge}
+            </div>
+        </div>`;
+}
+
+function bindContactClicks(listEl) {
+    listEl.querySelectorAll('.crm-contact:not([data-bound])').forEach(el => {
+        el.dataset.bound = '1';
+        el.addEventListener('click', () => {
+            listEl.querySelectorAll('.crm-contact').forEach(e => e.classList.remove('active'));
+            el.classList.add('active');
+            const customer = JSON.parse(el.dataset.customer);
+            activeConvId = el.dataset.convId;
+            activePageId = el.dataset.pageId;
+            activeCustomerPancakeId = el.dataset.custId;
+            loadMessages(activeConvId, activePageId, customer);
+            renderProfile(customer);
+        });
+    });
 }
 
 async function loadMessages(convId, pageId, customer) {
@@ -171,15 +276,14 @@ async function loadMessages(convId, pageId, customer) {
     const headerEl = document.getElementById('crm-chat-header');
     if (!msgEl || !headerEl) return;
 
-    // Update chat header
     headerEl.innerHTML = `
         <div>
             <span style="font-weight:600;font-size:14px">${customer.name || 'Khách hàng'}</span>
             ${customer.phone ? `<span style="font-size:12px;color:var(--text-muted);margin-left:8px">${customer.phone}</span>` : ''}
         </div>
         <div style="display:flex;gap:4px;align-items:center">
+            ${customer.page_name ? `<span class="tag tag-page" style="font-size:10px">${customer.page_name}</span>` : ''}
             <span class="tag tag-staff" style="font-size:10px">${customer.user_name || 'Chưa gán'}</span>
-            <span style="font-size:11px;color:var(--text-muted)">${fmtNumber(customer.total_messages || 0)} tin nhắn</span>
         </div>`;
 
     msgEl.innerHTML = '<div style="text-align:center;padding:40px"><div class="spinner"></div><div style="margin-top:8px;font-size:12px;color:var(--text-muted)">Đang tải tin nhắn...</div></div>';
@@ -197,7 +301,6 @@ async function loadMessages(convId, pageId, customer) {
             return;
         }
 
-        // Reverse for chronological order (API returns newest first)
         const sorted = [...messages].reverse();
 
         msgEl.innerHTML = `
@@ -221,11 +324,28 @@ async function loadMessages(convId, pageId, customer) {
     }
 }
 
-function renderProfile(customer) {
+async function renderProfile(customer) {
     const el = document.getElementById('crm-profile');
     if (!el) return;
 
     const tags = customer.tags || [];
+    const isRead = customer.is_read;
+    const waitMin = customer.waiting_minutes;
+    const respSec = customer.response_time_seconds;
+
+    // Format response time
+    let respText = '—';
+    if (respSec) {
+        const m = Math.round(respSec / 60);
+        respText = m > 60 ? `${Math.floor(m / 60)}h ${m % 60}p` : `${m} phút`;
+    }
+
+    // Waiting badge
+    let waitHtml = '';
+    if (waitMin && waitMin > 0) {
+        const cls = waitMin > 60 ? 'wait-critical' : waitMin > 15 ? 'wait-warning' : 'wait-ok';
+        waitHtml = `<div class="crm-wait-alert ${cls}">⚠️ KH đang chờ phản hồi ${waitMin > 60 ? Math.floor(waitMin / 60) + 'h ' + (waitMin % 60) + 'p' : waitMin + ' phút'}</div>`;
+    }
 
     el.innerHTML = `
         <div class="crm-profile-section">
@@ -238,15 +358,23 @@ function renderProfile(customer) {
                     <div style="font-size:12px;color:var(--text-muted)">${customer.phone || 'Chưa có SĐT'}</div>
                 </div>
             </div>
+            ${waitHtml}
         </div>
 
         <div class="crm-profile-section">
             <div class="crm-profile-label">Thông tin</div>
             <div style="display:flex;flex-direction:column;gap:6px;font-size:12px">
-                <div><span style="color:var(--text-muted)">Tin nhắn:</span> <strong>${fmtNumber(customer.total_messages || 0)}</strong></div>
                 <div><span style="color:var(--text-muted)">NV phụ trách:</span> <strong>${customer.user_name || 'Chưa gán'}</strong></div>
+                <div><span style="color:var(--text-muted)">Trang:</span> <strong>${customer.page_name || '—'}</strong></div>
                 <div><span style="color:var(--text-muted)">Ngày:</span> ${customer.date || '—'}</div>
+                <div><span style="color:var(--text-muted)">Phản hồi TB:</span> <strong>${respText}</strong></div>
+                <div><span style="color:var(--text-muted)">Trạng thái:</span> ${isRead ? '<span style="color:var(--green)">✅ Đã đọc</span>' : '<span style="color:var(--blue)">🔵 Chưa đọc</span>'}</div>
             </div>
+        </div>
+
+        <div class="crm-profile-section" id="crm-cross-page-section">
+            <div class="crm-profile-label">🔗 Lịch sử cross-page</div>
+            <div id="crm-cross-page-content" style="font-size:12px;color:var(--text-muted)">Đang kiểm tra...</div>
         </div>
 
         <div class="crm-profile-section">
@@ -260,8 +388,10 @@ function renderProfile(customer) {
         <div class="crm-profile-section">
             <div class="crm-profile-label">Hành động</div>
             <div style="display:flex;flex-direction:column;gap:6px">
-                <button class="btn btn-sm" id="crm-btn-read" style="justify-content:center">
-                    <i data-lucide="check-check" style="width:14px;height:14px"></i> Đánh dấu đã đọc
+                <button class="btn btn-sm" id="crm-btn-toggle-read" style="justify-content:center">
+                    ${isRead
+                        ? '<i data-lucide="eye-off" style="width:14px;height:14px"></i> Đánh dấu chưa đọc'
+                        : '<i data-lucide="check-check" style="width:14px;height:14px"></i> Đánh dấu đã đọc'}
                 </button>
                 <a class="btn btn-sm" href="https://pages.fm" target="_blank" style="justify-content:center;text-decoration:none">
                     <i data-lucide="external-link" style="width:14px;height:14px"></i> Mở trên Pancake
@@ -282,15 +412,85 @@ function renderProfile(customer) {
         } catch (err) { alert('Lỗi: ' + err.message); }
     });
 
-    // Mark as read handler
-    document.getElementById('crm-btn-read')?.addEventListener('click', async () => {
+    // Toggle read/unread handler
+    document.getElementById('crm-btn-toggle-read')?.addEventListener('click', async () => {
         if (!activeConvId || !activePageId) return;
         try {
-            await apiPost(`/crm/conversations/${activeConvId}/read`, { page_id: activePageId });
+            const endpoint = isRead ? 'unread' : 'read';
+            await apiPost(`/crm/conversations/${activeConvId}/${endpoint}`, { page_id: activePageId });
             const { toastInfo } = await import('../components/toast.js');
-            toastInfo('✅ Đã đánh dấu đã đọc');
+            toastInfo(isRead ? '🔵 Đã đánh dấu chưa đọc' : '✅ Đã đánh dấu đã đọc');
+            customer.is_read = !isRead;
+
+            // Update contact in list
+            const contactEl = document.querySelector(`.crm-contact[data-conv-id="${activeConvId}"]`);
+            if (contactEl) {
+                contactEl.dataset.isRead = String(!isRead);
+                if (isRead) {
+                    contactEl.classList.add('crm-unread');
+                    if (!contactEl.querySelector('.crm-unread-dot')) {
+                        contactEl.insertAdjacentHTML('afterbegin', '<div class="crm-unread-dot"></div>');
+                    }
+                } else {
+                    contactEl.classList.remove('crm-unread');
+                    contactEl.querySelector('.crm-unread-dot')?.remove();
+                }
+            }
+
+            // Update sidebar badge
+            updateUnreadBadge();
+
+            // Re-render profile with updated state
+            renderProfile(customer);
         } catch (err) { alert('Lỗi: ' + err.message); }
     });
+
+    // Load cross-page data
+    if (customer.customer_id) {
+        loadCrossPageInfo(customer.customer_id);
+    }
+}
+
+async function loadCrossPageInfo(customerId) {
+    const el = document.getElementById('crm-cross-page-content');
+    if (!el) return;
+
+    try {
+        const data = await apiGet(`/dashboard/conversations/cross-page/${customerId}`);
+
+        if (data.pages.length <= 1 && data.phone_matches.length === 0) {
+            el.innerHTML = '<span style="color:var(--text-muted)">Chỉ xuất hiện trên 1 trang</span>';
+            return;
+        }
+
+        let html = '<div style="display:flex;flex-direction:column;gap:6px">';
+        for (const p of data.pages) {
+            const icon = p.via_phone ? '📱' : '💬';
+            html += `<div style="display:flex;align-items:center;gap:6px">
+                <span>${icon}</span>
+                <span class="tag tag-page" style="font-size:10px">${p.page_name}</span>
+                ${p.via_phone ? '<span style="font-size:10px;color:var(--orange)">(cùng SĐT)</span>' : ''}
+            </div>`;
+        }
+        if (data.phone_matches.length > 0) {
+            html += '<div style="margin-top:4px;font-size:11px;color:var(--orange);font-weight:600">⚠️ KH đã tư vấn tại ' + data.phone_matches.map(m => m.page_name).join(', ') + '</div>';
+        }
+        html += '</div>';
+        el.innerHTML = html;
+    } catch {
+        el.innerHTML = '<span style="color:var(--text-muted)">—</span>';
+    }
+}
+
+export async function updateUnreadBadge() {
+    try {
+        const { count } = await apiGet('/dashboard/conversations/unread-count');
+        const badge = document.getElementById('sidebar-unread-badge');
+        if (badge) {
+            badge.textContent = count > 0 ? (count > 99 ? '99+' : count) : '';
+            badge.style.display = count > 0 ? 'inline-flex' : 'none';
+        }
+    } catch {}
 }
 
 function renderAttachments(attachments) {

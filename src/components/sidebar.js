@@ -34,6 +34,7 @@ export async function renderSidebar(container, activePage) {
                ${item.branchTag ? `data-branch="${item.branchTag}"` : ''}>
                 <i data-lucide="${item.icon}"></i>
                 <span>${item.label}</span>
+                ${item.id === 'conversations' ? '<span class="sidebar-badge" id="sidebar-unread-badge" style="display:none"></span>' : ''}
             </a>
         `;
     }

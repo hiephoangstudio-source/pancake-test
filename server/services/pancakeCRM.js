@@ -81,3 +81,11 @@ export async function markAsRead(pageId, convId, token) {
     const url = `${PAGES_API_V1}/pages/${pageId}/conversations/${convId}/read?page_access_token=${token}`;
     return fetchJsonSafe(url, { method: 'POST' });
 }
+
+/**
+ * Mark a conversation as unread.
+ */
+export async function markAsUnread(pageId, convId, token) {
+    const url = `${PAGES_API_V1}/pages/${pageId}/conversations/${convId}/unread?page_access_token=${token}`;
+    return fetchJsonSafe(url, { method: 'POST' });
+}

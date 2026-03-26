@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db.js';
 import { decrypt } from '../utils/crypto.js';
-import { getMessages, addTag, removeTag, getPageCustomers, assignConversation, markAsRead } from '../services/pancakeCRM.js';
+import { getMessages, addTag, removeTag, getPageCustomers, assignConversation, markAsRead, markAsUnread } from '../services/pancakeCRM.js';
 
 const router = Router();
 
@@ -16,7 +16,6 @@ async function getPageToken(pageId) {
 
 /**
  * GET /api/crm/conversations/:convId/messages
- * Query: ?page_id=xxx&page_size=20&before_id=xxx
  */
 router.get('/conversations/:convId/messages', async (req, res) => {
     try {
@@ -38,7 +37,6 @@ router.get('/conversations/:convId/messages', async (req, res) => {
 
 /**
  * POST /api/crm/conversations/:convId/tags
- * Body: { page_id, tag, action: 'add' | 'remove' }
  */
 router.post('/conversations/:convId/tags', async (req, res) => {
     try {
@@ -51,17 +49,10 @@ router.post('/conversations/:convId/tags', async (req, res) => {
             ? await removeTag(page_id, convId, token, tag)
             : await addTag(page_id, convId, token, tag);
 
-        // Also update the local conversation record
         if (action === 'add') {
-            await query(`
-                UPDATE conversations SET tags = tags || $1::jsonb, updated_at = NOW()
-                WHERE pancake_id = $2
-            `, [JSON.stringify([tag]), convId]);
+            await query('UPDATE conversations SET tags = tags || $1::jsonb, updated_at = NOW() WHERE pancake_id = $2', [JSON.stringify([tag]), convId]);
         } else {
-            await query(`
-                UPDATE conversations SET tags = tags - $1, updated_at = NOW()
-                WHERE pancake_id = $2
-            `, [tag, convId]);
+            await query('UPDATE conversations SET tags = tags - $1, updated_at = NOW() WHERE pancake_id = $2', [tag, convId]);
         }
 
         res.json({ success: true, result });
@@ -72,7 +63,6 @@ router.post('/conversations/:convId/tags', async (req, res) => {
 
 /**
  * GET /api/crm/customers
- * Query: ?page_id=xxx&since=YYYY-MM-DD&until=YYYY-MM-DD&page_number=1&page_size=20
  */
 router.get('/customers', async (req, res) => {
     try {
@@ -94,7 +84,6 @@ router.get('/customers', async (req, res) => {
 
 /**
  * POST /api/crm/conversations/:convId/assign
- * Body: { page_id, user_id }
  */
 router.post('/conversations/:convId/assign', async (req, res) => {
     try {
@@ -104,8 +93,6 @@ router.post('/conversations/:convId/assign', async (req, res) => {
 
         const token = await getPageToken(page_id);
         const result = await assignConversation(page_id, convId, token, user_id);
-
-        // Update local record
         await query('UPDATE conversations SET user_pancake_id = $1, updated_at = NOW() WHERE pancake_id = $2', [user_id, convId]);
 
         res.json({ success: true, result });
@@ -116,7 +103,7 @@ router.post('/conversations/:convId/assign', async (req, res) => {
 
 /**
  * POST /api/crm/conversations/:convId/read
- * Body: { page_id }
+ * Marks as read on Pancake + local DB
  */
 router.post('/conversations/:convId/read', async (req, res) => {
     try {
@@ -125,8 +112,32 @@ router.post('/conversations/:convId/read', async (req, res) => {
         if (!page_id) return res.status(400).json({ error: 'page_id required' });
 
         const token = await getPageToken(page_id);
-        const result = await markAsRead(page_id, convId, token);
-        res.json({ success: true, result });
+        let pancakeResult = null;
+        try { pancakeResult = await markAsRead(page_id, convId, token); } catch {}
+        await query('UPDATE conversations SET is_read = TRUE, updated_at = NOW() WHERE pancake_id = $1', [convId]);
+
+        res.json({ success: true, result: pancakeResult });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * POST /api/crm/conversations/:convId/unread
+ * Marks as unread on Pancake + local DB
+ */
+router.post('/conversations/:convId/unread', async (req, res) => {
+    try {
+        const { convId } = req.params;
+        const { page_id } = req.body;
+        if (!page_id) return res.status(400).json({ error: 'page_id required' });
+
+        const token = await getPageToken(page_id);
+        let pancakeResult = null;
+        try { pancakeResult = await markAsUnread(page_id, convId, token); } catch {}
+        await query('UPDATE conversations SET is_read = FALSE, updated_at = NOW() WHERE pancake_id = $1', [convId]);
+
+        res.json({ success: true, result: pancakeResult });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
